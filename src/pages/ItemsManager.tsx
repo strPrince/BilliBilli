@@ -238,7 +238,7 @@ export default function ItemsManager() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-[#2C3E50] text-lg">{item.nameGu}</span>
-                    {!item.isCustom && <CheckCircle2 size={14} className="text-blue-500" />}
+                  {!item.isCustom && <CheckCircle2 size={14} className="text-blue-500" title="માસ્ટર આઇટમ" />}
                   </div>
                   <div className="text-sm text-gray-400 font-medium">{item.nameEn}</div>
                   {item.isCustom && (
@@ -250,21 +250,30 @@ export default function ItemsManager() {
                 <div className="flex gap-1 ml-3">
                   <button
                     onClick={() => openEditModal(item)}
+                    disabled={!item.isCustom}
+                    title={item.isCustom ? "આઇટમ સંપાદિત કરો" : "માસ્ટર આઇટમ્સ સંભાલી શકાતા નથી"}
                     className={cn(
                       "p-2.5 rounded-xl transition-all active:scale-90",
-                      item.isCustom ? "text-blue-600 bg-white" : "text-gray-400 hover:bg-gray-100"
+                      item.isCustom 
+                        ? "text-blue-600 bg-white hover:bg-blue-50 cursor-pointer" 
+                        : "text-gray-300 bg-gray-50 cursor-not-allowed opacity-50"
                     )}
                   >
                     <Edit2 size={18} />
                   </button>
-                  {item.isCustom && (
-                    <button
-                      onClick={() => handleDelete(item)}
-                      className="p-2.5 text-red-400 bg-white rounded-xl active:scale-90"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleDelete(item)}
+                    disabled={!item.isCustom}
+                    title={item.isCustom ? "આઇટમ કાઢી દો" : "માસ્ટર આઇટમ્સ કાઢી શકાતા નથી"}
+                    className={cn(
+                      "p-2.5 rounded-xl transition-all active:scale-90",
+                      item.isCustom
+                        ? "text-red-400 bg-white hover:bg-red-50 cursor-pointer"
+                        : "text-gray-300 bg-gray-50 cursor-not-allowed opacity-50"
+                    )}
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </motion.div>
             ))}
@@ -350,6 +359,21 @@ export default function ItemsManager() {
                 </div>
 
                 <div className="flex gap-4 pt-2">
+                  {editingItem && editingItem.id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`શું તમે '${editingItem.nameGu}' કાઢી દેવા છો?`)) {
+                          handleDelete(editingItem);
+                          setShowModal(false);
+                        }
+                      }}
+                      className="flex-1 py-4 px-6 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100 active:scale-95 transition-all"
+                    >
+                      <Trash2 size={18} className="inline mr-2" />
+                      કાઢી દો
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
