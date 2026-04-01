@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="BilliBilli icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1d3a" />
+      <stop offset="100%" stop-color="#1d4d9b" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <circle cx="256" cy="256" r="148" fill="#ffffff" opacity="0.95" />
+  <path d="M196 188h112c45 0 78 28 78 68 0 37-27 62-67 68l66 66h-70l-57-61h-23v61h-59V188zm59 48v47h49c15 0 24-9 24-24 0-14-10-23-24-23h-49z" fill="#0b1d3a" />
+</svg>
