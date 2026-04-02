@@ -14,6 +14,7 @@ import OrderReview from './pages/order/OrderReview';
 import SettingsPage from './pages/Settings';
 import ItemsManager from './pages/ItemsManager';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import { ToastContainer } from './components/Toast';
 
 /** Utility for Tailwind class merging */
 function cn(...inputs: ClassValue[]) {
@@ -148,6 +149,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <PWAInstallPrompt />
+      <ToastContainer />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />

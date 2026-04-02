@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../../db/database';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
-import { Edit3, FileDown, Share2, CheckCircle, Edit2, Trash2, Plus, Calendar, MapPin, User, Phone, ChevronDown, ChevronUp } from 'lucide-react';
+import { Edit3, FileDown, Share2, CheckCircle, Edit2, Trash2, Plus, Calendar, MapPin, User, Phone } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -23,7 +23,19 @@ export default function OrderReview() {
   const profile = useLiveQuery(() => db.businessProfile.get(1));
 
   const [isExporting, setIsExporting] = useState(false);
-  const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
+
+  // Helper function to adjust color brightness
+  const adjustColorBrightness = (hex: string, percent: number) => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent * 100);
+    const R = (num >> 16) + amt;
+    const G = (num >> 8 & 0x00FF) + amt;
+    const B = (num & 0x0000FF) + amt;
+    return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+      (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+      (B < 255 ? B < 1 ? 0 : B : 255))
+      .toString(16).slice(1).toUpperCase();
+  };
 
   const uiText = {
     confirmDelete: '\u0AB6\u0AC1\u0A82 \u0AA4\u0AAE\u0AC7',
@@ -64,24 +76,16 @@ export default function OrderReview() {
     }
   };
 
-  const toggleSlot = (slotId: string) => {
-    const newSet = new Set(collapsedSlots);
-    if (newSet.has(slotId)) newSet.delete(slotId);
-    else newSet.add(slotId);
-    setCollapsedSlots(newSet);
-  };
-
   const handleComplete = async () => {
     await db.orders.update(orderId, { status: 'completed' });
     navigate('/');
   };
 
-  const morning = useMemo(() => items?.filter(i => i.timeSlot === 'morning' && (i.kg > 0 || i.gram > 0)) || [], [items]);
-  const afternoon = useMemo(() => items?.filter(i => i.timeSlot === 'afternoon' && (i.kg > 0 || i.gram > 0)) || [], [items]);
-  const evening = useMemo(() => items?.filter(i => i.timeSlot === 'evening' && (i.kg > 0 || i.gram > 0)) || [], [items]);
-
   const generateHTML = () => {
     if (!order || !items || !profile) return '';
+
+    const pdfColor = profile.pdfColor || '#8B0000';
+    const pdfColorDark = adjustColorBrightness(pdfColor, -0.3);
 
     const labels = {
       shreeGanesh: '\u0964\u0964 \u0AB6\u0ACD\u0AB0\u0AC0 \u0A97\u0AA3\u0AC7\u0AB6\u0ABE\u0AAF \u0AA8\u0AAE\u0A83 \u0964\u0964',
@@ -112,7 +116,7 @@ export default function OrderReview() {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
-    const allItems = [...morning, ...afternoon, ...evening];
+    const allItems = items?.filter(i => i.kg > 0 || i.gram > 0) || [];
     const TOP_NOTE_SPACE_HEIGHT = 90;
     const MIN_DATA_ROWS = 12;
     const dataRowsNeeded = Math.ceil(allItems.length / 3);
@@ -155,91 +159,93 @@ export default function OrderReview() {
             font-size: 9.6px;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-            line-height: 1.35;
+            line-height: 1.5;
           }
           .pg {
             width: 190mm;
             margin: 0 auto;
-            padding: 4.2mm 4.8mm;
+            padding: 5mm 5mm;
           }
 
           .hd {
-            border: 2px solid #8B0000;
+            border: 2px solid ${pdfColor};
             border-radius: 5px;
-            padding: 5px 8px 6px;
-            margin-bottom: 4px;
+            padding: 6px 10px 7px;
+            margin-bottom: 5px;
             position: relative;
           }
           .hd-top {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
           }
           .hd-ganesh {
             font-size: 8px;
-            color: #8B0000;
+            color: ${pdfColor};
             font-weight: 700;
             letter-spacing: 0.5px;
+            line-height: 1.4;
           }
           .hd-contact {
             font-size: 8.2px;
             text-align: right;
             color: #222;
-            line-height: 1.45;
+            line-height: 1.5;
           }
-          .hd-contact strong { color: #8B0000; }
+          .hd-contact strong { color: ${pdfColor}; }
           .hd-brand { text-align: center; }
           .hd-name {
             font-size: 21px;
             font-weight: 900;
-            color: #8B0000;
-            line-height: 1.15;
+            color: ${pdfColor};
+            line-height: 1.3;
             letter-spacing: -0.2px;
           }
           .hd-tag {
             font-size: 8.2px;
             color: #555;
-            margin-top: 2px;
-            line-height: 1.3;
+            margin-top: 3px;
+            line-height: 1.4;
           }
 
           .ci {
             width: 100%;
             border-collapse: collapse;
-            border: 1.5px solid #8B0000;
+            border: 1.5px solid ${pdfColor};
             border-radius: 4px;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
             overflow: hidden;
           }
           .ci td {
-            padding: 4px 7px;
+            padding: 5px 8px;
             border: 0.8px solid #d4a0a0;
-            vertical-align: top;
+            vertical-align: middle;
+            min-height: 24px;
           }
           .ci-lbl {
             display: block;
             font-size: 7px;
-            color: #8B0000;
+            color: ${pdfColor};
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.3px;
             margin-bottom: 2px;
-            line-height: 1;
+            line-height: 1.3;
           }
           .ci-val {
             display: block;
             font-size: 10px;
             font-weight: 700;
             color: #111;
-            line-height: 1.25;
+            line-height: 1.4;
           }
 
           .mt {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
-            border: 2px solid #8B0000;
+            border: 2px solid ${pdfColor};
             border-radius: 3px;
             overflow: hidden;
           }
@@ -251,45 +257,48 @@ export default function OrderReview() {
             border-bottom: none;
           }
           .mt .top-space th:not(:last-child) {
-            border-right: 1.5px solid #8B0000;
+            border-right: 1.5px solid ${pdfColor};
           }
 
           .mt .sh th {
-            background: #8B0000;
+            background: ${pdfColor};
             color: #fff;
             font-size: 10px;
             font-weight: 700;
             text-align: center;
-            padding: 4.5px 3px;
+            padding: 5px 3px;
             letter-spacing: 0.5px;
-            line-height: 1.15;
+            line-height: 1.3;
+            min-height: 22px;
           }
           .mt .sh th:nth-child(1),
           .mt .sh th:nth-child(2) {
-            border-right: 1.5px solid #5a0000;
+            border-right: 1.5px solid ${pdfColorDark};
           }
 
           .mt .sbh th {
             background: #fdf0f0;
-            color: #8B0000;
+            color: ${pdfColor};
             font-size: 8px;
             font-weight: 700;
             text-align: center;
-            padding: 3px 2px;
-            border-bottom: 1.5px solid #8B0000;
-            line-height: 1.2;
+            padding: 4px 2px;
+            border-bottom: 1.5px solid ${pdfColor};
+            line-height: 1.35;
             letter-spacing: 0.15px;
+            min-height: 20px;
           }
           .mt .sbh th:nth-child(3),
           .mt .sbh th:nth-child(6) {
-            border-right: 1.5px solid #8B0000;
+            border-right: 1.5px solid ${pdfColor};
           }
           .mt tbody tr td {
-            padding: 3.5px 4px;
+            padding: 4.5px 5px;
             font-size: 9px;
             border-bottom: 0.5px solid #f1dede;
             vertical-align: middle;
-            line-height: 1.35;
+            line-height: 1.45;
+            min-height: 20px;
           }
           .mt tbody tr.alt td { background: #fffafa; }
           .mt tbody tr:last-child td { border-bottom: none; }
@@ -299,17 +308,18 @@ export default function OrderReview() {
             font-weight: 600;
             color: #111;
             border-right: 0.5px solid #e5b5b5 !important;
-            line-height: 1.35;
+            line-height: 1.45;
             word-break: break-word;
+            overflow-wrap: break-word;
           }
           .c-ki {
             width: 22px;
             text-align: center;
             font-size: 8.2px;
             font-weight: 700;
-            color: #8B0000;
+            color: ${pdfColor};
             border-right: 0.5px solid #e5b5b5 !important;
-            line-height: 1.2;
+            line-height: 1.4;
             white-space: nowrap;
           }
           .c-gr {
@@ -319,30 +329,30 @@ export default function OrderReview() {
             font-weight: 700;
             color: #555;
             border-right: none !important;
-            line-height: 1.2;
+            line-height: 1.4;
             white-space: nowrap;
           }
           .c-gr.sep-right {
-            border-right: 1.5px solid #8B0000 !important;
+            border-right: 1.5px solid ${pdfColor} !important;
           }
 
           .nb {
-            margin-top: 4px;
-            border: 1.5px solid #8B0000;
+            margin-top: 5px;
+            border: 1.5px solid ${pdfColor};
             border-radius: 3px;
-            padding: 4px 6px;
+            padding: 6px 8px;
             font-size: 9px;
             background: #fffafa;
-            line-height: 1.4;
+            line-height: 1.5;
           }
-          .nb strong { color: #8B0000; font-size: 8px; text-transform: uppercase; }
+          .nb strong { color: ${pdfColor}; font-size: 8px; text-transform: uppercase; }
 
           .ft {
-            margin-top: 6px;
+            margin-top: 7px;
             text-align: center;
             font-size: 7px;
             color: #aaa;
-            line-height: 1.4;
+            line-height: 1.5;
           }
         </style>
 
@@ -444,12 +454,18 @@ export default function OrderReview() {
       document.body.appendChild(element);
 
       const opt = {
-        margin:       [4, 4, 4, 4] as [number, number, number, number],
+        margin:       [3, 3, 3, 3] as [number, number, number, number],
         filename:     `${order?.customerName}_Bill.pdf`,
         image:        { type: 'jpeg' as const, quality: 1 },
-        html2canvas:  { scale: 2.2, useCORS: true, letterRendering: true },
-        jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
-        pagebreak:    { mode: ['css', 'legacy'] as ['css', 'legacy'] }
+        html2canvas:  { 
+          scale: 2.5, 
+          useCORS: true, 
+          letterRendering: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        },
+        jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const, compress: false },
+        pagebreak:    { mode: ['css', 'legacy'] as ['css', 'legacy'], avoid: 'tr' }
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -467,8 +483,9 @@ export default function OrderReview() {
   const shareWhatsApp = async () => {
     if (!order || !items) return;
 
-    const formatItems = (slotItems: typeof items) => 
-      slotItems
+    const filteredItems = items.filter(i => i.kg > 0 || i.gram > 0);
+    const formatItems = (itemList: typeof items) => 
+      itemList
         .map(
           (i) =>
             `${uiIcons.check} *${i.itemNameGu}*: ${
@@ -483,9 +500,7 @@ export default function OrderReview() {
       `${uiIcons.date} *${uiText.date}:* ${dayjs(order.eventDate).format('DD/MM/YYYY')}\n` +
       `${uiIcons.event} *${uiText.eventType}:* ${order.eventType}\n` +
       `${waDivider}\n\n` +
-      (morning.length ? `*${uiIcons.morning} ${uiText.morning}*\n${formatItems(morning)}\n\n` : '') +
-      (afternoon.length ? `*${uiIcons.afternoon} ${uiText.afternoon}*\n${formatItems(afternoon)}\n\n` : '') +
-      (evening.length ? `*${uiIcons.evening} ${uiText.evening}*\n${formatItems(evening)}\n\n` : '') +
+      `*${uiText.items}*\n${formatItems(filteredItems)}\n\n` +
       (order.notes ? `*${uiIcons.notes} ${uiText.notes}:*\n${order.notes}\n\n` : '') +
       `_Generated via CaterBill_`;
 
@@ -556,81 +571,58 @@ export default function OrderReview() {
           </div>
         </motion.div>
 
-        {/* Time Slots */}
-        {[
-          { title: uiText.morning, items: morning, icon: uiIcons.morning, color: 'text-orange-500', bg: 'bg-orange-50', id: 'morning' },
-          { title: uiText.afternoon, items: afternoon, icon: uiIcons.afternoon, color: 'text-blue-500', bg: 'bg-blue-50', id: 'afternoon' },
-          { title: uiText.evening, items: evening, icon: uiIcons.evening, color: 'text-purple-500', bg: 'bg-purple-50', id: 'evening' }
-        ].map((slot, sIdx) => (
-          <motion.div 
-            key={slot.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: sIdx * 0.1 }}
-            className="bg-white rounded-[28px] shadow-sm border border-gray-100 overflow-hidden"
-          >
-            <button 
-              onClick={() => toggleSlot(slot.id)}
-              className={cn("w-full px-5 py-4 flex items-center justify-between transition-colors text-left", slot.bg)}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-xl">{slot.icon}</span>
-                <span className={cn("font-black uppercase tracking-widest text-sm", slot.color)}>{slot.title}</span>
-                <span className="text-[10px] font-black bg-white px-2 py-1 rounded-full shadow-sm text-gray-400">
-                  {slot.items.length} {uiText.items}
-                </span>
+        {/* Items List */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-[28px] shadow-sm border border-gray-100 overflow-hidden"
+        >
+          <div className="px-5 py-4 bg-red-50/30 flex items-center gap-3">
+            <span className="text-xl">📦</span>
+            <span className="font-black uppercase tracking-widest text-sm text-[#C0392B]">{uiText.items}</span>
+            <span className="text-[10px] font-black bg-white px-2 py-1 rounded-full shadow-sm text-gray-400">
+              {items.filter(i => i.kg > 0 || i.gram > 0).length} આઇટમ્સ
+            </span>
+          </div>
+          
+          <div className="divide-y divide-gray-50">
+            {items.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{uiText.noItems}</p>
               </div>
-              {collapsedSlots.has(slot.id) ? <ChevronDown size={20} className="text-gray-400" /> : <ChevronUp size={20} className="text-gray-400" />}
-            </button>
-            
-            <AnimatePresence initial={false}>
-              {!collapsedSlots.has(slot.id) && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="divide-y divide-gray-50">
-                    {slot.items.length === 0 ? (
-                      <div className="p-8 text-center">
-                        <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{uiText.noItems}</p>
+            ) : (
+              items.map(item => (
+                (item.kg > 0 || item.gram > 0) && (
+                  <div key={item.id} className="p-4 px-5 flex justify-between items-center group active:bg-gray-50 transition-colors">
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-800 text-lg leading-tight">{item.itemNameGu}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs font-black text-[#C0392B] bg-red-50 px-2 py-0.5 rounded-lg">
+                          {item.kg > 0 && `${item.kg} ${uiText.kilo} `}
+                          {item.gram > 0 && `${item.gram} ${uiText.gram}`}
+                        </span>
                       </div>
-                    ) : (
-                      slot.items.map(item => (
-                        <div key={item.id} className="p-4 px-5 flex justify-between items-center group active:bg-gray-50 transition-colors">
-                          <div className="flex-1">
-                            <p className="font-bold text-gray-800 text-lg leading-tight">{item.itemNameGu}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs font-black text-[#C0392B] bg-red-50 px-2 py-0.5 rounded-lg">
-                                {item.kg > 0 && `${item.kg} ${uiText.kilo} `}
-                                {item.gram > 0 && `${item.gram} ${uiText.gram}`}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => navigate(`/order/${orderId}/quantities`)}
-                              className="p-2.5 text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteItem(item.id!, item.itemNameGu)}
-                              className="p-2.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => navigate(`/order/${orderId}/items`)}
+                        className="p-2.5 text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(item.id!, item.itemNameGu)}
+                        className="p-2.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        ))}
+                )
+              ))
+            )}
+          </div>
+        </motion.div>
 
         {/* Notes */}
         {order.notes && (
@@ -651,28 +643,28 @@ export default function OrderReview() {
           <button 
             onClick={exportPDF}
             disabled={isExporting}
-            className="flex-1 flex items-center justify-center gap-2 py-4 bg-gray-50 text-gray-700 rounded-2xl font-black text-sm active:scale-95 transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 py-4 bg-gray-50 text-gray-700 rounded-2xl font-black text-sm active:scale-95 transition-all disabled:opacity-50 h-14"
           >
-            {isExporting ? <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" /> : <FileDown size={18} />}
+            {isExporting ? <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" /> : <FileDown size={20} />}
             PDF
           </button>
           <button 
             onClick={shareWhatsApp}
-            className="flex-[1.5] flex items-center justify-center gap-2 py-4 bg-[#25D366] text-white rounded-2xl font-black text-sm shadow-lg shadow-green-900/10 active:scale-95 transition-all"
+            className="flex-[1.5] flex items-center justify-center gap-2 py-4 bg-[#25D366] text-white rounded-2xl font-black text-sm shadow-lg shadow-green-900/10 active:scale-95 transition-all h-14"
           >
-            <Share2 size={18} /> WhatsApp
+            <Share2 size={20} /> WhatsApp
           </button>
           <button 
             onClick={() => navigate(`/order/${orderId}/items`)}
-            className="p-4 bg-gray-100 text-gray-500 rounded-2xl active:scale-95 transition-all"
+            className="p-4 bg-gray-100 text-gray-500 rounded-2xl active:scale-95 transition-all h-14 w-14 flex items-center justify-center"
           >
-            <Plus size={20} />
+            <Plus size={24} />
           </button>
         </div>
         
         <button 
           onClick={handleComplete}
-          className="w-full flex items-center justify-center gap-3 bg-[#C0392B] text-white py-5 rounded-[24px] font-black text-lg shadow-xl shadow-red-900/20 active:scale-[0.98] transition-all"
+          className="w-full flex items-center justify-center gap-3 bg-[#C0392B] text-white py-5 rounded-[24px] font-black text-lg shadow-xl shadow-red-900/20 active:scale-[0.98] transition-all h-16"
         >
           <CheckCircle size={24} /> 
           {order.status === 'completed' ? uiText.backHome : uiText.completeOrder}

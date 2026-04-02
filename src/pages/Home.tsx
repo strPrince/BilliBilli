@@ -5,9 +5,12 @@ import dayjs from 'dayjs';
 import { Search, Trash2, FileText, Calendar, User, ChevronRight, Clock } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { showToast } from '../components/Toast';
 
 export default function Home() {
   const [search, setSearch] = useState('');
+  const [deletedOrder, setDeletedOrder] = useState<any>(null);
+  const [deletedItems, setDeletedItems] = useState<any[]>([]);
   
   const orders = useLiveQuery(
     () => db.orders.orderBy('createdAt').reverse().toArray()
@@ -19,13 +22,41 @@ export default function Home() {
   );
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('શું તમે ખરેખર આ ઓર્ડર કાઢી નાખવા માંગો છો?')) {
-      // Batch operations in a transaction for better performance
-      await db.transaction('rw', db.orders, db.orderItems, async () => {
-        await db.orders.delete(id);
-        await db.orderItems.where('orderId').equals(id).delete();
-      });
-    }
+    if (!window.confirm('શું તમે ખરેખર આ ઓર્ડર કાઢી નાખવા માંગો છો?')) return;
+
+    // Get order and items before deletion
+    const order = await db.orders.get(id);
+    const items = await db.orderItems.where('orderId').equals(id).toArray();
+    
+    // Store for undo
+    setDeletedOrder(order);
+    setDeletedItems(items);
+
+    // Delete from database
+    await db.transaction('rw', db.orders, db.orderItems, async () => {
+      await db.orders.delete(id);
+      await db.orderItems.where('orderId').equals(id).delete();
+    });
+
+    // Show toast with undo option
+    showToast(
+      `'${order?.customerName}' ઓર્ડર કાઢી નાખવામાં આવ્યો`,
+      'undo',
+      5000,
+      {
+        label: 'પુનરાવર્તિત',
+        callback: async () => {
+          // Restore order and items
+          if (order) {
+            await db.orders.add(order);
+            if (deletedItems.length > 0) {
+              await db.orderItems.bulkAdd(deletedItems);
+            }
+            showToast('ઓર્ડર પુનરાવર્તિત કર્યો', 'success');
+          }
+        }
+      }
+    );
   };
 
   return (
@@ -104,18 +135,18 @@ export default function Home() {
                   </div>
                 </Link>
 
-                <div className="px-5 py-3 bg-gray-50/50 flex justify-between items-center border-t border-gray-100">
+                <div className="px-5 py-4 bg-gray-50/50 flex justify-between items-center border-t border-gray-100">
                   <Link 
                     to={`/order/${order.id}/review`}
-                    className="flex items-center gap-1 text-[#C0392B] font-bold text-sm"
+                    className="flex-1 flex items-center justify-center gap-2 text-[#C0392B] font-black text-sm bg-white rounded-xl active:scale-95 transition-all h-12"
                   >
-                    વિગત જુઓ <ChevronRight size={16} />
+                    વિગત જુઓ <ChevronRight size={18} />
                   </Link>
                   <button 
                     onClick={() => order.id && handleDelete(order.id)}
-                    className="text-red-400 p-2 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+                    className="ml-3 text-red-400 p-4 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all active:scale-95"
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={20} />
                   </button>
                 </div>
               </motion.div>

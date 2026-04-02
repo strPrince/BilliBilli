@@ -246,13 +246,13 @@ export default function OrderQuantities() {
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 pb-10 z-30 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] flex gap-3">
         <button 
           onClick={() => navigate(`/order/${orderId}/items`)}
-          className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+          className="flex-1 bg-gray-100 text-gray-600 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all h-12"
         >
           <ChevronLeft size={20} /> પાછા
         </button>
         <button 
           onClick={() => navigate(`/order/${orderId}/review`)}
-          className="flex-[2] bg-[#C0392B] text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-red-900/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+          className="flex-[2] bg-[#C0392B] text-white rounded-2xl font-black text-lg shadow-xl shadow-red-900/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all h-16"
         >
           રિવ્યૂ કરો <ChevronRight size={24} />
         </button>

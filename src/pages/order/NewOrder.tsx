@@ -174,7 +174,7 @@ export default function NewOrder() {
 
           <button 
             type="submit" 
-            className="w-full bg-[#C0392B] text-white py-5 rounded-2xl font-black text-lg mt-4 flex items-center justify-center gap-2 shadow-xl shadow-red-900/20 active:scale-[0.98] transition-all"
+            className="w-full bg-[#C0392B] text-white py-5 rounded-2xl font-black text-lg mt-4 flex items-center justify-center gap-2 shadow-xl shadow-red-900/20 active:scale-[0.98] transition-all h-16"
           >
             {isEdit ? 'સાચવો' : 'આગળ વધો'}
             {!isEdit && <ChevronRight size={24} />}

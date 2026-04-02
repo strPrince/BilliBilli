@@ -4,7 +4,7 @@ import { db } from '../../db/database';
 import { MASTER_ITEMS, ItemCategory } from '../../data/masterItems';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCustomItems } from '../../hooks/useCustomItems';
-import { Search, CheckCircle2, Circle, Plus, X, Package, ChevronRight, CheckSquare, Square } from 'lucide-react';
+import { Search, CheckCircle2, Circle, Plus, X, Package, ChevronRight, CheckSquare, Square, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -32,6 +32,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   'અન્ય': 'અન્ય',
 };
 
+interface SelectedItemData {
+  key: string;
+  nameGu: string;
+  nameEn: string;
+  category: ItemCategory;
+  isCustom: number;
+  kg: number;
+  gram: number;
+}
+
 export default function OrderItems() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -39,83 +49,158 @@ export default function OrderItems() {
 
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<ItemCategory>('લોટ_અને_બેસન');
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [selectedItemsData, setSelectedItemsData] = useState<Map<string, SelectedItemData>>(new Map());
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customItem, setCustomItem] = useState({ nameGu: '', nameEn: '', category: 'અન્ય' as ItemCategory });
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const customItems = useCustomItems();
   const existingOrderItems = useLiveQuery(() => db.orderItems.where('orderId').equals(orderId).toArray());
 
   useEffect(() => {
     if (existingOrderItems && existingOrderItems.length > 0) {
-      setSelectedItems(new Set(existingOrderItems.map(i => i.itemKey)));
+      const itemsMap = new Map<string, SelectedItemData>();
+      const itemsByKey = new Map<string, typeof existingOrderItems>();
+      
+      existingOrderItems.forEach(item => {
+        if (!itemsByKey.has(item.itemKey)) {
+          itemsByKey.set(item.itemKey, []);
+        }
+        itemsByKey.get(item.itemKey)!.push(item);
+      });
+
+      itemsByKey.forEach((items, key) => {
+        const first = items[0];
+        itemsMap.set(key, {
+          key,
+          nameGu: first.itemNameGu,
+          nameEn: first.itemNameEn,
+          category: first.category,
+          isCustom: first.isCustom,
+          kg: first.kg,
+          gram: first.gram
+        });
+      });
+
+      setSelectedItemsData(itemsMap);
+      setExpandedItems(new Set(itemsMap.keys()));
     } else {
-      setSelectedItems(new Set());
+      setSelectedItemsData(new Map());
     }
   }, [existingOrderItems]);
 
-  const allItems = useMemo(() => [
-    ...MASTER_ITEMS, 
-    ...customItems.map(c => ({
-      key: c.itemKey,
-      nameGu: c.itemNameGu,
-      nameEn: c.itemNameEn,
-      category: c.category,
-      isCustom: 1
-    }))
-  ], [customItems]);
+  const allItems = useMemo(() => {
+    // Deduplicate custom items by key (latest entry wins), then let custom override master.
+    const customByKey = new Map<string, (typeof customItems)[number]>();
+    customItems.forEach((item) => {
+      customByKey.set(item.itemKey, item);
+    });
 
-  const filteredItems = useMemo(() => allItems.filter(item => {
+    const overriddenKeys = new Set(customByKey.keys());
+
+    const masterList = MASTER_ITEMS
+      .filter((item) => !overriddenKeys.has(item.key))
+      .map((item) => ({
+        key: item.key,
+        nameGu: item.nameGu,
+        nameEn: item.nameEn,
+        category: item.category,
+        isCustom: 0,
+      }));
+
+    const customList = Array.from(customByKey.values()).map((item) => ({
+      key: item.itemKey,
+      nameGu: item.itemNameGu,
+      nameEn: item.itemNameEn,
+      category: item.category,
+      isCustom: 1,
+    }));
+
+    return [...masterList, ...customList];
+  }, [customItems]);
+
+  const filteredItems = useMemo(() => allItems.filter((item: any) => {
     const matchesSearch = item.nameGu.includes(search) || item.nameEn.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = search ? true : item.category === activeCategory;
     return matchesSearch && matchesCategory;
   }), [allItems, search, activeCategory]);
 
-  const toggleItem = (key: string) => {
-    const newSet = new Set(selectedItems);
-    if (newSet.has(key)) {
-      newSet.delete(key);
+  const toggleItem = (key: string, itemDef: (typeof allItems)[0]) => {
+    const newMap = new Map(selectedItemsData);
+    if (newMap.has(key)) {
+      newMap.delete(key);
     } else {
-      newSet.add(key);
+      newMap.set(key, {
+        key,
+        nameGu: itemDef.nameGu,
+        nameEn: itemDef.nameEn,
+        category: itemDef.category,
+        isCustom: itemDef.isCustom,
+        kg: 0,
+        gram: 0
+      });
     }
-    setSelectedItems(newSet);
+    setSelectedItemsData(newMap);
+  };
+
+  const updateQuantity = (itemKey: string, type: 'kg' | 'gram', value: number) => {
+    const newMap = new Map(selectedItemsData);
+    const item = newMap.get(itemKey);
+    if (item) {
+      item[type] = value;
+      setSelectedItemsData(newMap);
+    }
   };
 
   const toggleSelectAll = () => {
-    const currentKeys = filteredItems.map(i => i.key);
-    const allSelected = currentKeys.every(k => selectedItems.has(k));
+    const currentKeys = filteredItems.map((i: any) => i.key);
+    const allSelected = currentKeys.every((k: string) => selectedItemsData.has(k));
     
-    const newSet = new Set(selectedItems);
+    const newMap = new Map(selectedItemsData);
     if (allSelected) {
-      currentKeys.forEach(k => newSet.delete(k));
+      currentKeys.forEach((k: string) => newMap.delete(k));
     } else {
-      currentKeys.forEach(k => newSet.add(k));
+      currentKeys.forEach((k: string) => {
+        if (!newMap.has(k)) {
+          const item = filteredItems.find((i: any) => i.key === k)!;
+          newMap.set(k, {
+            key: k,
+            nameGu: item.nameGu,
+            nameEn: item.nameEn,
+            category: item.category,
+            isCustom: item.isCustom,
+            kg: 0,
+            gram: 0
+          });
+        }
+      });
     }
-    setSelectedItems(newSet);
+    setSelectedItemsData(newMap);
   };
 
   const handleSave = async () => {
     await db.orderItems.where('orderId').equals(orderId).delete();
-    const itemsToInsert = Array.from(selectedItems).flatMap(key => {
-      const itemDef = allItems.find(i => i.key === key);
-      if (!itemDef) return [];
+    const itemsToInsert: any[] = [];
 
-      return ['morning', 'afternoon', 'evening'].map(slot => ({
+    selectedItemsData.forEach((itemData: SelectedItemData) => {
+      itemsToInsert.push({
         orderId,
-        itemKey: key as string,
-        itemNameGu: itemDef.nameGu,
-        itemNameEn: itemDef.nameEn,
-        category: itemDef.category,
-        timeSlot: slot as any,
-        kg: 0,
-        gram: 0,
-        isCustom: (itemDef as any).isCustom ? 1 : 0,
+        itemKey: itemData.key,
+        itemNameGu: itemData.nameGu,
+        itemNameEn: itemData.nameEn,
+        category: itemData.category,
+        timeSlot: 'morning',
+        kg: itemData.kg,
+        gram: itemData.gram,
+        isCustom: itemData.isCustom,
         sortOrder: 0
-      }));
+      });
     });
 
-    await db.orderItems.bulkAdd(itemsToInsert);
-    navigate(`/order/${orderId}/quantities`);
+    if (itemsToInsert.length > 0) {
+      await db.orderItems.bulkAdd(itemsToInsert);
+    }
+    navigate(`/order/${orderId}/review`);
   };
 
   const handleAddCustom = async () => {
@@ -128,12 +213,24 @@ export default function OrderItems() {
       category: customItem.category,
       createdAt: new Date().toISOString()
     });
-    setSelectedItems(prev => new Set(prev).add(key));
+    
+    const newMap = new Map(selectedItemsData);
+    newMap.set(key, {
+      key,
+      nameGu: customItem.nameGu,
+      nameEn: customItem.nameEn,
+      category: customItem.category as ItemCategory,
+      isCustom: 1,
+      kg: 0,
+      gram: 0
+    });
+    setSelectedItemsData(newMap);
+    setExpandedItems(new Set(newMap.keys()));
     setShowCustomModal(false);
     setCustomItem({ nameGu: '', nameEn: '', category: 'અન્ય' });
   };
 
-  const allFilteredSelected = filteredItems.length > 0 && filteredItems.every(i => selectedItems.has(i.key));
+  const allFilteredSelected = filteredItems.length > 0 && filteredItems.every((i: any) => selectedItemsData.has(i.key));
 
   return (
     <div className="flex flex-col bg-[#F8F9FA] min-h-full">
@@ -147,7 +244,7 @@ export default function OrderItems() {
               type="text"
               placeholder="શોધો... ઉદા: રવો"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e: any) => setSearch(e.target.value)}
               className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-[#C0392B] focus:ring-2 focus:ring-[#C0392B]/10 outline-none transition-all text-base"
             />
           </div>
@@ -195,34 +292,68 @@ export default function OrderItems() {
       {/* Items List */}
       <div className="p-4 space-y-3 pb-40">
         <AnimatePresence initial={false}>
-          {filteredItems.map((item, idx) => {
-            const isSelected = selectedItems.has(item.key);
+          {filteredItems.map((item: any, idx: number) => {
+            const isSelected = selectedItemsData.has(item.key);
             return (
               <motion.div 
                 key={item.key}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.1, delay: Math.min(idx * 0.01, 0.1) }}
-                onClick={() => toggleItem(item.key)}
                 className={cn(
-                  "flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer select-none",
+                  "rounded-2xl border-2 transition-all",
                   isSelected 
                     ? "border-[#C0392B] bg-white shadow-md shadow-red-900/5" 
                     : "border-gray-100 bg-white"
                 )}
               >
-                <div className={cn(
-                  "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                  isSelected ? "bg-[#C0392B] border-[#C0392B]" : "bg-white border-gray-200"
-                )}>
-                  {isSelected && <CheckCircle2 size={16} className="text-white" />}
-                </div>
-                <div className="flex-1">
-                  <p className={cn("font-bold text-lg leading-tight transition-colors", isSelected ? "text-[#C0392B]" : "text-gray-800")}>
-                    {item.nameGu}
-                  </p>
-                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{item.nameEn}</p>
-                </div>
+                <button 
+                  onClick={() => toggleItem(item.key, item)}
+                  className="w-full flex items-center gap-3 p-4 select-none"
+                >
+                  <div className={cn(
+                    "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0",
+                    isSelected ? "bg-[#C0392B] border-[#C0392B]" : "bg-white border-gray-200"
+                  )}>
+                    {isSelected && <CheckCircle2 size={16} className="text-white" />}
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className={cn("font-bold text-base leading-tight transition-colors", isSelected ? "text-[#C0392B]" : "text-gray-800")}>
+                      {item.nameGu}
+                    </p>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{item.nameEn}</p>
+                  </div>
+
+                  {/* Inline Quantity Inputs */}
+                  {isSelected && (
+                    <div className="flex items-end gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <div className="w-16">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          placeholder="0"
+                          value={selectedItemsData.get(item.key)?.kg || ''}
+                          onChange={(e) => updateQuantity(item.key, 'kg', parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#C0392B] focus:ring-1 focus:ring-[#C0392B]/20 outline-none text-center font-bold text-sm text-gray-900 transition-all"
+                        />
+                        <span className="text-[7px] font-black text-gray-400 block text-center mt-0.5">કિલો</span>
+                      </div>
+                      <div className="w-16">
+                        <input
+                          type="number"
+                          min="0"
+                          step="50"
+                          placeholder="0"
+                          value={selectedItemsData.get(item.key)?.gram || ''}
+                          onChange={(e) => updateQuantity(item.key, 'gram', parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#C0392B] focus:ring-1 focus:ring-[#C0392B]/20 outline-none text-center font-bold text-sm text-gray-900 transition-all"
+                        />
+                        <span className="text-[7px] font-black text-gray-400 block text-center mt-0.5">ગ્રામ</span>
+                      </div>
+                    </div>
+                  )}
+                </button>
               </motion.div>
             );
           })}
@@ -236,26 +367,53 @@ export default function OrderItems() {
         )}
       </div>
 
+      {/* Selected Items Summary */}
+      {selectedItemsData.size > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white border-t border-gray-100 p-4 space-y-3"
+        >
+          <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider px-2">પસંદ કરેલી વસ્તુઓ</h3>
+          <div className="space-y-2 max-h-32 overflow-y-auto">
+            {Array.from(selectedItemsData.values()).map(item => (
+              <div key={item.key} className="flex items-center justify-between bg-gray-50 p-3 rounded-xl">
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-gray-900">{item.nameGu}</p>
+                  <p className="text-xs text-gray-400">{item.nameEn}</p>
+                </div>
+                <button 
+                  onClick={() => toggleItem(item.key, item)}
+                  className="p-2 text-gray-400 hover:text-red-500 active:scale-90 transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Footer Actions */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 pb-10 z-30 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
         <div className="flex justify-between items-center mb-4 px-2">
           <div className="flex flex-col">
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">પસંદ કરેલ</span>
-            <span className="text-lg font-black text-[#C0392B]">{selectedItems.size} વસ્તુઓ</span>
+            <span className="text-lg font-black text-[#C0392B]">{selectedItemsData.size} વસ્તુઓ</span>
           </div>
           <button 
             onClick={() => setShowCustomModal(true)}
-            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-1 active:scale-95 transition-all"
+            className="bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-bold text-sm flex items-center gap-1 active:scale-95 transition-all h-12"
           >
-            <Plus size={18} /> નવી વસ્તુ
+            <Plus size={20} /> નવી વસ્તુ
           </button>
         </div>
         <button 
           onClick={handleSave}
-          disabled={selectedItems.size === 0}
-          className="w-full bg-[#C0392B] disabled:bg-gray-200 disabled:text-gray-400 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-red-900/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+          disabled={selectedItemsData.size === 0}
+          className="w-full bg-[#C0392B] disabled:bg-gray-200 disabled:text-gray-400 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-red-900/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all h-16"
         >
-          જથ્થો નક્કી કરો <ChevronRight size={24} />
+          રિવ્યૂ કરો <ChevronRight size={24} />
         </button>
       </div>
 

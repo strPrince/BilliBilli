@@ -21,6 +21,7 @@ interface Item {
   isCustom: boolean;
 }
 
+// Deprecated - now loaded from database
 const CATEGORIES: ItemCategory[] = [
   'લોટ_અને_બેસન',
   'મસાલા',
@@ -53,15 +54,21 @@ const CATEGORY_LABELS: Record<ItemCategory, string> = {
 
 export default function ItemsManager() {
   const customItems = useCustomItems();
+  const customCategories = useLiveQuery(() => db.customCategories.toArray());
   
-  const [selectedCategory, setSelectedCategory] = useState<ItemCategory>('લોટ_અને_બેસન');
+  const [selectedCategory, setSelectedCategory] = useState<string>('લોટ_અને_બેસન');
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [formData, setFormData] = useState({
     nameGu: '',
     nameEn: '',
     category: 'લોટ_અને_બેસન' as ItemCategory,
+  });
+  const [categoryFormData, setCategoryFormData] = useState({
+    categoryLabelGu: '',
+    categoryLabelEn: '',
   });
 
   // Combine master items and custom items
@@ -81,28 +88,55 @@ export default function ItemsManager() {
     return [...masterList, ...customList];
   }, [customItems]);
 
-  // Filter items by category and search
+  // Filter items by category and search - using string comparison for dynamic categories
   const filteredItems = useMemo(() => {
-    return allItems
-      .filter(item => item.nameGu && item.nameEn) // Filter out deleted items (empty names)
-      .filter(item => item.category === selectedCategory)
-      .filter(item =>
+    return ((allItems || []) as Item[])
+      .filter((item: Item) => item.nameGu && item.nameEn) // Filter out deleted items (empty names)
+      .filter((item: Item) => String(item.category) === String(selectedCategory))
+      .filter((item: Item) =>
         item.nameGu.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.nameEn.toLowerCase().includes(searchQuery.toLowerCase())
       )
-      .sort((a, b) => {
+      .sort((a: Item, b: Item) => {
         if (a.isCustom && !b.isCustom) return -1;
         if (!a.isCustom && b.isCustom) return 1;
         return a.nameGu.localeCompare(b.nameGu);
       });
   }, [allItems, selectedCategory, searchQuery]);
 
+  // Set initial selected category when customCategories loads
+  useEffect(() => {
+    if (customCategories && customCategories.length > 0 && selectedCategory === 'લોટ_અને_બેસન') {
+      // If the default category exists in customCategories, keep it. Otherwise, set to first available
+      const hasDefault = customCategories.some(c => c.categoryKeyGu === 'લોટ_અને_બેસન');
+      if (!hasDefault && customCategories.length > 0) {
+        setSelectedCategory(customCategories[0].categoryKeyGu);
+      }
+    }
+  }, [customCategories]);
+
+  // Deduplicate categories - remove duplicates while maintaining order
+  const uniqueCategories = useMemo(() => {
+    if (!customCategories) return [];
+    const seen = new Set<string>();
+    const unique = [];
+    
+    for (const cat of customCategories) {
+      if (!seen.has(cat.categoryKeyGu)) {
+        seen.add(cat.categoryKeyGu);
+        unique.push(cat);
+      }
+    }
+    
+    return unique;
+  }, [customCategories]);
+
   const openAddModal = () => {
     setEditingItem(null);
     setFormData({
       nameGu: '',
       nameEn: '',
-      category: selectedCategory,
+      category: selectedCategory as ItemCategory,
     });
     setShowModal(true);
   };
@@ -136,7 +170,7 @@ export default function ItemsManager() {
       } else if (editingItem && !editingItem.id) {
         // Editing a master item - create/update a custom override with the same key
         const existingCustom = (customItems || []).find(c => c.itemKey === editingItem.key);
-        if (existingCustom) {
+        if (existingCustom && existingCustom.id) {
           // Update existing override
           await db.customItems.update(existingCustom.id, {
             itemNameGu: formData.nameGu,
@@ -180,7 +214,7 @@ export default function ItemsManager() {
         } else if (!item.isCustom) {
           // For master items, create a custom delete marker (empty names)
           const existingCustom = (customItems || []).find(c => c.itemKey === item.key);
-          if (existingCustom) {
+          if (existingCustom && existingCustom.id) {
             // Delete the override if it exists
             await db.customItems.delete(existingCustom.id);
           } else {
@@ -200,29 +234,76 @@ export default function ItemsManager() {
     }
   };
 
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoryFormData.categoryLabelGu.trim() || !categoryFormData.categoryLabelEn.trim()) return;
+
+    try {
+      // Generate key from Gujarati label by replacing spaces with underscores
+      const categoryKeyGu = categoryFormData.categoryLabelGu
+        .replace(/\s+/g, '_')
+        .replace(/\W/g, '');
+
+      // Check if category already exists
+      const existing = await db.customCategories
+        .where('categoryKeyGu')
+        .equals(categoryKeyGu)
+        .first();
+
+      if (existing) {
+        alert('આ શ્રેણી પહેલેથી અસ્તિત્વમાં છે');
+        return;
+      }
+
+      await db.customCategories.add({
+        categoryKeyGu: categoryKeyGu,
+        categoryLabelGu: categoryFormData.categoryLabelGu,
+        categoryLabelEn: categoryFormData.categoryLabelEn,
+        isBuiltIn: false,
+        createdAt: new Date().toISOString(),
+      });
+
+      setCategoryFormData({ categoryLabelGu: '', categoryLabelEn: '' });
+      setShowCategoryModal(false);
+      setSelectedCategory(categoryKeyGu);
+      alert('શ્રેણી સફળતાપૂર્વક બનાઈ !');
+    } catch (error) {
+      console.error('Error creating category:', error);
+      alert('શ્રેણી બનાવવામાં ભૂલ');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#F8F9FA]">
       {/* Category Tabs - Scrollable */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
         <div className="flex overflow-x-auto no-scrollbar px-4 py-3 gap-2">
-          {CATEGORIES.map(cat => (
+          {uniqueCategories?.map((cat, index) => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              key={`${cat.id}-${cat.categoryKeyGu}-${index}`}
+              onClick={() => setSelectedCategory(cat.categoryKeyGu)}
               className={cn(
                 "px-4 py-2 rounded-xl whitespace-nowrap text-sm font-bold transition-all relative",
-                selectedCategory === cat ? "text-white" : "text-gray-500 bg-gray-50 hover:bg-gray-100"
+                selectedCategory === cat.categoryKeyGu ? "text-white" : "text-gray-500 bg-gray-50 hover:bg-gray-100"
               )}
             >
-              {selectedCategory === cat && (
+              {selectedCategory === cat.categoryKeyGu && (
                 <motion.div 
                   layoutId="active-cat"
                   className="absolute inset-0 bg-[#C0392B] rounded-xl -z-10 shadow-lg shadow-red-900/10"
                 />
               )}
-              {CATEGORY_LABELS[cat]}
+              {cat.categoryLabelGu}
             </button>
           ))}
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            title="નવી શ્રેણી બનાવો"
+            className="px-3 py-2 rounded-xl whitespace-nowrap text-sm font-bold text-[#C0392B] bg-red-50 hover:bg-red-100 transition-all flex items-center gap-1"
+          >
+            <Plus size={16} />
+            નવી
+          </button>
         </div>
       </div>
 
@@ -234,7 +315,7 @@ export default function ItemsManager() {
             type="text"
             placeholder="શોધો... ઉદા: રવો"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-100 rounded-2xl shadow-sm focus:ring-2 focus:ring-[#C0392B]/20 outline-none text-base"
           />
         </div>
@@ -242,7 +323,7 @@ export default function ItemsManager() {
         {/* Action Button */}
         <button
           onClick={openAddModal}
-          className="w-full bg-[#C0392B] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-[#A93226] active:scale-[0.98] transition-all shadow-md"
+          className="w-full bg-[#C0392B] text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-[#A93226] active:scale-[0.98] transition-all shadow-md h-12"
         >
           <Plus size={22} />
           નવું આઇટમ ઉમેરો
@@ -251,7 +332,7 @@ export default function ItemsManager() {
         {/* Stats Summary */}
         <div className="flex items-center gap-3 px-1 py-1">
           <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-            {CATEGORY_LABELS[selectedCategory]} ({filteredItems.length})
+            {uniqueCategories?.find(c => c.categoryKeyGu === selectedCategory)?.categoryLabelGu || 'શ્રેણી'} ({filteredItems.length})
           </div>
           <div className="h-px bg-gray-100 flex-1" />
         </div>
@@ -259,7 +340,7 @@ export default function ItemsManager() {
         {/* Items Grid/List */}
         <div className="grid gap-3">
           <AnimatePresence initial={false}>
-            {filteredItems.map((item, idx) => (
+            {filteredItems.map((item: Item, idx: number) => (
               <motion.div
                 key={`${item.key}-${idx}`}
                 initial={{ opacity: 0 }}
@@ -353,8 +434,8 @@ export default function ItemsManager() {
                     onChange={e => setFormData({ ...formData, category: e.target.value as ItemCategory })}
                     className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#C0392B]/20 outline-none text-base appearance-none"
                   >
-                    {CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+                    {uniqueCategories?.map(cat => (
+                      <option key={cat.categoryKeyGu} value={cat.categoryKeyGu}>{cat.categoryLabelGu}</option>
                     ))}
                   </select>
                 </div>
@@ -393,7 +474,7 @@ export default function ItemsManager() {
                           setShowModal(false);
                         }
                       }}
-                      className="flex-1 py-4 px-6 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100 active:scale-95 transition-all"
+                      className="flex-1 px-6 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100 active:scale-95 transition-all h-12 flex items-center justify-center"
                     >
                       <Trash2 size={18} className="inline mr-2" />
                       કાઢી દો
@@ -402,15 +483,91 @@ export default function ItemsManager() {
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 py-4 px-6 bg-gray-100 text-gray-600 rounded-2xl font-bold active:scale-95 transition-all"
+                    className="flex-1 px-6 bg-gray-100 text-gray-600 rounded-2xl font-bold active:scale-95 transition-all h-12 flex items-center justify-center"
                   >
                     રદ કરો
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-4 px-6 bg-[#C0392B] text-white rounded-2xl font-bold shadow-lg shadow-red-900/20 active:scale-95 transition-all"
+                    className="flex-1 px-6 bg-[#C0392B] text-white rounded-2xl font-bold shadow-lg shadow-red-900/20 active:scale-95 transition-all h-12 flex items-center justify-center"
                   >
                     સાચવો
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Category Creation Modal */}
+      <AnimatePresence>
+        {showCategoryModal && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCategoryModal(false)}
+              className="fixed inset-0 bg-black/40 z-50"
+            />
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed inset-x-0 bottom-0 bg-white rounded-t-[32px] p-6 pt-2 z-50 shadow-2xl safe-bottom max-h-[90vh] overflow-y-auto"
+            >
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto my-4" />
+              
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900">નવી શ્રેણી બનાવો</h3>
+                <button
+                  onClick={() => setShowCategoryModal(false)}
+                  className="p-2 rounded-full bg-gray-100 text-gray-500 active:scale-90 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveCategory} className="space-y-6 pb-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-gray-500 ml-1">શ્રેણીનું નામ (ગુજરાતી)</label>
+                  <input
+                    type="text"
+                    required
+                    value={categoryFormData.categoryLabelGu}
+                    onChange={e => setCategoryFormData({ ...categoryFormData, categoryLabelGu: e.target.value })}
+                    placeholder="જેમ: નવું કેટેગરી"
+                    className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#C0392B]/20 outline-none font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-gray-500 ml-1">શ્રેણીનું નામ (અંગ્રેજી)</label>
+                  <input
+                    type="text"
+                    required
+                    value={categoryFormData.categoryLabelEn}
+                    onChange={e => setCategoryFormData({ ...categoryFormData, categoryLabelEn: e.target.value })}
+                    placeholder="e.g: New Category"
+                    className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#C0392B]/20 outline-none"
+                  />
+                </div>
+
+                <div className="flex gap-4 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryModal(false)}
+                    className="flex-1 px-6 bg-gray-100 text-gray-600 rounded-2xl font-bold active:scale-95 transition-all h-12 flex items-center justify-center"
+                  >
+                    રદ કરો
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-6 bg-[#C0392B] text-white rounded-2xl font-bold shadow-lg shadow-red-900/20 active:scale-95 transition-all h-12 flex items-center justify-center"
+                  >
+                    બનાવો
                   </button>
                 </div>
               </form>

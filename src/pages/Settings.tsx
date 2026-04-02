@@ -31,6 +31,7 @@ export default function SettingsPage() {
     phone1: '',
     phone2: '',
     address: '',
+    pdfColor: '#8B0000',
   });
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export default function SettingsPage() {
         phone1: profile.phone1,
         phone2: profile.phone2,
         address: profile.address,
+        pdfColor: profile.pdfColor || '#8B0000',
       });
     }
   }, [profile]);
@@ -90,26 +92,46 @@ export default function SettingsPage() {
   };
 
   const exportData = async () => {
-    const allOrders = await db.orders.toArray();
-    const allItems = await db.orderItems.toArray();
-    const allCustomItems = await db.customItems.toArray();
-    const profileData = await db.businessProfile.get(1);
+    try {
+      const allOrders = await db.orders.toArray();
+      const allItems = await db.orderItems.toArray();
+      const allCustomItems = await db.customItems.toArray();
+      const allCustomCategories = await db.customCategories.toArray();
+      const profileData = await db.businessProfile.get(1);
 
-    const backup = {
-      exportedAt: new Date().toISOString(),
-      profile: profileData,
-      orders: allOrders,
-      items: allItems,
-      customItems: allCustomItems,
-    };
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        appVersion: '1.0',
+        dataSnapshot: {
+          profile: profileData,
+          orders: allOrders,
+          items: allItems,
+          customItems: allCustomItems,
+          customCategories: allCustomCategories,
+        },
+        summary: {
+          totalOrders: allOrders.length,
+          totalOrderItems: allItems.length,
+          totalCustomItems: allCustomItems.length,
+          totalCustomCategories: allCustomCategories.filter(c => !c.isBuiltIn).length,
+          businessName: profileData?.name || 'Backup',
+        }
+      };
 
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `caterbill_backup_${dayjs().format('DD_MM_YYYY')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `caterbill_backup_${backup.summary.businessName}_${dayjs().format('DD_MM_YYYY_HH_mm_ss')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      // Show success message
+      alert(`✓ બેકઅપ સફળ!\n\nઓર્ડર્સ: ${backup.summary.totalOrders}\nઆઇટમ્સ: ${backup.summary.totalOrderItems}\nકસ્ટમ આઇટમ્સ: ${backup.summary.totalCustomItems}\nકસ્ટમ શ્રેણી: ${backup.summary.totalCustomCategories}`);
+    } catch (error) {
+      console.error('Export Error:', error);
+      alert('બેકઅપ નિર્માણમાં ભૂલ. કૃપા પછીથી પ્રયાસ કરો.');
+    }
   };
 
   const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,26 +141,115 @@ export default function SettingsPage() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string);
-        if (data.orders && data.items) {
-          if (window.confirm('શું તમે ખરેખર બેકઅપ રિસ્ટોર કરવા માંગો છો? આ હાલનો ડેટા ભૂંસી નાખશે.')) {
-            await db.transaction('rw', db.orders, db.orderItems, db.customItems, db.businessProfile, async () => {
-              await db.orders.clear();
-              await db.orderItems.clear();
-              await db.customItems.clear();
-              if (data.profile) await db.businessProfile.put(data.profile);
-              if (data.orders.length) await db.orders.bulkAdd(data.orders);
-              if (data.items.length) await db.orderItems.bulkAdd(data.items);
-              if (data.customItems?.length) await db.customItems.bulkAdd(data.customItems);
-            });
-            alert('ડેટા સફળતાપૂર્વક રિસ્ટોર કરવામાં આવ્યો છે');
-          }
+        const backupData = JSON.parse(event.target?.result as string);
+        
+        // Validate backup structure
+        const data = backupData.dataSnapshot || backupData; // Support both old and new format
+        
+        if (!data.orders || !data.items) {
+          alert('અમાન્ય બેકઅપ ફાઈલ. કૃપા સાચી ફાઈલ પસંદ કરો.');
+          return;
+        }
+
+        const customCategoriesCount = data.customCategories?.filter((c: any) => !c.isBuiltIn)?.length || 0;
+        const importSummary = {
+          orders: data.orders?.length || 0,
+          items: data.items?.length || 0,
+          customItems: data.customItems?.length || 0,
+          customCategories: customCategoriesCount,
+          profile: data.profile?.name || 'Unknown'
+        };
+
+        const confirmMsg = `બેકઅપ રિસ્ટોર કરવો??\n\n📦 ઓર્ડર્સ: ${importSummary.orders}\n📋 આઇટમ્સ: ${importSummary.items}\n✨ કસ્ટમ આઇટમ્સ: ${importSummary.customItems}\n📂 કસ્ટમ શ્રેણી: ${importSummary.customCategories}\n\nⓘ હાલના બધા ડેટા બદલાશે`;
+
+        if (window.confirm(confirmMsg)) {
+          await db.transaction('rw', db.orders, db.orderItems, db.customItems, db.customCategories, db.businessProfile, async () => {
+            // Clear existing data (keep built-in categories, remove custom ones)
+            await db.orders.clear();
+            await db.orderItems.clear();
+            await db.customItems.clear();
+            
+            // Clear custom categories but keep built-in ones
+            const allCategories = await db.customCategories.toArray();
+            for (const category of allCategories) {
+              if (!category.isBuiltIn) {
+                await db.customCategories.delete(category.id!);
+              }
+            }
+
+            // Restore data in order
+            if (data.profile) {
+              await db.businessProfile.put(data.profile);
+            }
+            if (data.orders?.length > 0) {
+              await db.orders.bulkAdd(data.orders);
+            }
+            if (data.items?.length > 0) {
+              await db.orderItems.bulkAdd(data.items);
+            }
+            if (data.customItems?.length > 0) {
+              await db.customItems.bulkAdd(data.customItems);
+            }
+            if (data.customCategories?.length > 0) {
+              // Only restore custom categories, not built-in ones
+              const customCategoriesToRestore = data.customCategories.filter((c: any) => !c.isBuiltIn);
+              if (customCategoriesToRestore.length > 0) {
+                await db.customCategories.bulkAdd(customCategoriesToRestore);
+              }
+            }
+          });
+
+          alert(`✓ બેકઅપ સફળતાપૂર્વક રિસ્ટોર!\n\n📦 ઓર્ડર્સ: ${importSummary.orders}\n📋 આઇટમ્સ: ${importSummary.items}\n✨ કસ્ટમ આઇટમ્સ: ${importSummary.customItems}\n📂 કસ્ટમ શ્રેણી: ${importSummary.customCategories}\n\n૨ સેકન્ડમાં એપ રીફ્રેશ થશે...`);
+          
+          // Refresh page after 2 seconds to reload data
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
         }
       } catch (error) {
         console.error('Import Error:', error);
+        alert(`બેકઅપ આયાતમાં ભૂલ:\n${error instanceof Error ? error.message : 'અજ્ઞાત ભૂલ'}`);
       }
     };
     reader.readAsText(file);
+  };
+
+  const cleanupDuplicateCategories = async () => {
+    if (!window.confirm('શું તમે ડુપ્લિકેટ શ્રેણી સાફ કરવા માંગો છો? આ અપરિવર્તનીય છે.')) {
+      return;
+    }
+
+    try {
+      const allCategories = await db.customCategories.toArray();
+      
+      // Find and delete duplicate built-in categories, keeping only one of each
+      const seenKeys: { [key: string]: boolean } = {};
+      const duplicateIds: number[] = [];
+
+      for (const category of allCategories) {
+        if (category.isBuiltIn) {
+          if (seenKeys[category.categoryKeyGu]) {
+            // This is a duplicate - mark for deletion
+            if (category.id) {
+              duplicateIds.push(category.id);
+            }
+          } else {
+            seenKeys[category.categoryKeyGu] = true;
+          }
+        }
+      }
+
+      // Delete duplicate entries
+      for (const id of duplicateIds) {
+        await db.customCategories.delete(id);
+      }
+
+      alert(`✓ સાફ કરવું સંપન્ન!\n\nડુપ્લિકેટ હટાવવામાં આવ્યું: ${duplicateIds.length}\n\nપૃષ્ઠ તાજું કરવામાં આવશે...`);
+      window.location.reload();
+    } catch (error) {
+      console.error('Cleanup Error:', error);
+      alert('સાફ કરવામાં ભૂલ');
+    }
   };
 
   return (
@@ -214,13 +325,35 @@ export default function SettingsPage() {
                 onChange={e => setFormData({...formData, address: e.target.value})}
               />
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PDF હેડર રંગ</label>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input 
+                    type="color" 
+                    value={formData.pdfColor}
+                    onChange={e => setFormData({...formData, pdfColor: e.target.value})}
+                    className="w-full h-12 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-[#C0392B] focus:ring-4 focus:ring-[#C0392B]/5 outline-none cursor-pointer transition-all"
+                  />
+                </div>
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border border-transparent rounded-2xl min-w-max">
+                  <div 
+                    className="w-8 h-8 rounded-lg border-2 border-gray-200 shadow-sm"
+                    style={{ backgroundColor: formData.pdfColor }}
+                  />
+                  <span className="text-xs font-bold text-gray-600 font-mono">{formData.pdfColor.toUpperCase()}</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5 ml-1">PDF નોટ્સ વિસ્તારમાં રંગ બદલતું હોય છે</p>
+            </div>
           </div>
           
           <button 
             type="submit" 
             disabled={saveSuccess}
             className={cn(
-              "w-full flex items-center justify-center gap-2 py-5 rounded-2xl font-black text-lg shadow-xl transition-all active:scale-[0.98]",
+              "w-full flex items-center justify-center gap-2 rounded-2xl font-black text-lg shadow-xl transition-all active:scale-[0.98] h-16",
               saveSuccess 
                 ? "bg-green-500 text-white shadow-green-900/10" 
                 : "bg-[#C0392B] text-white shadow-red-900/20"
@@ -252,7 +385,7 @@ export default function SettingsPage() {
             onClick={handleInstall}
             disabled={!installPrompt}
             className={cn(
-              "w-full py-4 px-6 rounded-2xl font-black flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg",
+              "w-full px-6 rounded-2xl font-black flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg h-12",
               installPrompt
                 ? "bg-white text-blue-700 enabled:active:scale-95"
                 : "bg-white/50 text-white cursor-not-allowed opacity-75"
@@ -315,6 +448,13 @@ export default function SettingsPage() {
             <input type="file" accept=".json" onChange={importData} className="hidden" />
           </label>
         </div>
+
+        <button
+          onClick={cleanupDuplicateCategories}
+          className="w-full px-4 py-3 text-sm font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-2xl hover:bg-orange-100 active:scale-95 transition-all"
+        >
+          🧹 ડુપ્લિકેટ શ્રેણી સાફ કરો
+        </button>
       </div>
 
       <div className="flex flex-col items-center gap-2 pt-4 opacity-30">
