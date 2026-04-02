@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../../db/database';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
-import { Edit3, FileDown, Share2, CheckCircle, Edit2, Trash2, Plus, Calendar, MapPin, User, Phone, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Edit3, FileDown, Share2, CheckCircle, Edit2, Trash2, Plus, Calendar, MapPin, User, Phone, ChevronDown, ChevronUp } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -25,8 +25,41 @@ export default function OrderReview() {
   const [isExporting, setIsExporting] = useState(false);
   const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
 
+  const uiText = {
+    confirmDelete: '\u0AB6\u0AC1\u0A82 \u0AA4\u0AAE\u0AC7',
+    confirmDeleteSuffix: '\u0A95\u0ABE\u0AA2\u0AC0 \u0AA6\u0AC7\u0AB5\u0ABE \u0AAE\u0ABE\u0A82\u0A97\u0ACB \u0A9B\u0ACB?',
+    date: '\u0AA4\u0ABE\u0AB0\u0AC0\u0A96',
+    eventType: '\u0AAA\u0ACD\u0AB0\u0AB8\u0A82\u0A97 \u0AAA\u0ACD\u0AB0\u0A95\u0ABE\u0AB0',
+    morning: '\u0AB8\u0AB5\u0ABE\u0AB0\u0AC7',
+    afternoon: '\u0AAC\u0AAA\u0ACB\u0AB0\u0AC7',
+    evening: '\u0AB8\u0ABE\u0A82\u0A9C\u0AC7',
+    items: '\u0AB5\u0AB8\u0ACD\u0AA4\u0AC1\u0A93',
+    noItems: '\u0A95\u0ACB\u0A88 \u0AB5\u0AB8\u0ACD\u0AA4\u0AC1 \u0AA8\u0AA5\u0AC0',
+    kilo: '\u0A95\u0ABF\u0AB2\u0ACB',
+    gram: '\u0A97\u0ACD\u0AB0\u0ABE\u0AAE',
+    notes: '\u0AA8\u0ACB\u0A82\u0AA7',
+    backHome: '\u0AB9\u0ACB\u0AAE \u0AAA\u0AB0 \u0AAA\u0ABE\u0A9B\u0ABE \u0AAB\u0AB0\u0ACB',
+    completeOrder: '\u0A93\u0AB0\u0ACD\u0AA1\u0AB0 \u0AAA\u0AC2\u0AB0\u0ACD\u0AA3 \u0A95\u0AB0\u0ACB',
+    waOrderDetails: '\u0A93\u0AB0\u0ACD\u0AA1\u0AB0 \u0AB5\u0ABF\u0A97\u0AA4',
+    waCustomer: '\u0A97\u0ACD\u0AB0\u0ABE\u0AB9\u0A95',
+  } as const;
+
+  const uiIcons = {
+    package: '\u{1F4E6}',
+    customer: '\u{1F464}',
+    date: '\u{1F4C5}',
+    event: '\u{1F389}',
+    morning: '\u{1F305}',
+    afternoon: '\u2600\uFE0F',
+    evening: '\u{1F319}',
+    notes: '\u{1F4DD}',
+    check: '\u2705',
+  } as const;
+
+  const waDivider = '--------------------';
+
   const handleDeleteItem = async (itemId: number, itemName: string) => {
-    if (window.confirm(`શું તમે '${itemName}' કાઢી દેવા માંગો છો?`)) {
+    if (window.confirm(`${uiText.confirmDelete} '${itemName}' ${uiText.confirmDeleteSuffix}`)) {
       await db.orderItems.delete(itemId);
     }
   };
@@ -50,139 +83,383 @@ export default function OrderReview() {
   const generateHTML = () => {
     if (!order || !items || !profile) return '';
 
-    // Filter items that have values
-    const mItems = morning;
-    const bItems = afternoon;
-    const sItems = evening;
+    const labels = {
+      shreeGanesh: '\u0964\u0964 \u0AB6\u0ACD\u0AB0\u0AC0 \u0A97\u0AA3\u0AC7\u0AB6\u0ABE\u0AAF \u0AA8\u0AAE\u0A83 \u0964\u0964',
+      mo: '\u0AAE\u0ACB.',
+      secondNumber: '\u0AAC\u0AC0\u0A9C\u0ACB \u0AA8\u0A82\u0AAC\u0AB0',
+      defaultAddress: '\u0AAE\u0AC7\u0AB8\u0AB5\u0ABE\u0AA3\u0AB5\u0ABE\u0AB3\u0ABE',
+      customerName: '\u0A97\u0ACD\u0AB0\u0ABE\u0AB9\u0A95\u0AA8\u0AC1\u0A82 \u0AA8\u0ABE\u0AAE',
+      date: '\u0AA4\u0ABE\u0AB0\u0AC0\u0A96',
+      eventType: '\u0AAA\u0ACD\u0AB0\u0AB8\u0A82\u0A97 \u0AAA\u0ACD\u0AB0\u0A95\u0ABE\u0AB0',
+      orderNumber: '\u0A93\u0AB0\u0ACD\u0AA1\u0AB0 \u0AA8\u0A82\u0AAC\u0AB0',
+      address: '\u0AB8\u0AB0\u0AA8\u0ABE\u0AAE\u0AC1\u0A82',
+      phone: '\u0AAB\u0ACB\u0AA8 \u0AA8\u0A82\u0AAC\u0AB0',
+      morning: '\u0AB8\u0AB5\u0ABE\u0AB0\u0AC7',
+      afternoon: '\u0AAC\u0AAA\u0ACB\u0AB0\u0AC7',
+      evening: '\u0AB8\u0ABE\u0A82\u0A9C\u0AC7',
+      details: '\u0AB5\u0ABF\u0A97\u0AA4',
+      kiloShort: '\u0A95\u0ABF.',
+      gramShort: '\u0A97\u0ACD\u0AB0\u0ABE.',
+      notes: '\u0AA8\u0ACB\u0A82\u0AA7',
+    } as const;
 
-    const maxRows = Math.max(mItems.length, bItems.length, sItems.length);
+    const escapeHTML = (value?: string | null) =>
+      (value ?? '-')
+        .toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 
-    let tableRows = '';
-    for (let i = 0; i < maxRows; i++) {
-      const m = mItems[i];
-      const b = bItems[i];
-      const s = sItems[i];
+    const allItems = [...morning, ...afternoon, ...evening];
+    const TOP_NOTE_SPACE_HEIGHT = 90;
+    const MIN_DATA_ROWS = 12;
+    const dataRowsNeeded = Math.ceil(allItems.length / 3);
+    const totalDataRows = Math.max(dataRowsNeeded, MIN_DATA_ROWS);
 
-      tableRows += `
-        <tr style="height: 28px;">
-          <!-- Morning Slot -->
-          <td style="border: 1px solid #000; padding: 2px 5px; font-size: 13px; font-weight: bold; width: 180px;">${m ? m.itemNameGu : ''}</td>
-          <td style="border: 1px solid #000; padding: 2px; font-size: 14px; text-align: center; width: 40px; font-weight: bold;">${m?.kg || ''}</td>
-          <td style="border: 1px solid #000; padding: 2px; font-size: 14px; text-align: center; width: 40px; font-weight: bold;">${m?.gram || ''}</td>
-          
-          <!-- Afternoon Slot -->
-          <td style="border: 1px solid #000; padding: 2px 5px; font-size: 13px; font-weight: bold; width: 180px;">${b ? b.itemNameGu : ''}</td>
-          <td style="border: 1px solid #000; padding: 2px; font-size: 14px; text-align: center; width: 40px; font-weight: bold;">${b?.kg || ''}</td>
-          <td style="border: 1px solid #000; padding: 2px; font-size: 14px; text-align: center; width: 40px; font-weight: bold;">${b?.gram || ''}</td>
-          
-          <!-- Evening Slot -->
-          <td style="border: 1px solid #000; padding: 2px 5px; font-size: 13px; font-weight: bold; width: 180px;">${s ? s.itemNameGu : ''}</td>
-          <td style="border: 1px solid #000; padding: 2px; font-size: 14px; text-align: center; width: 40px; font-weight: bold;">${s?.kg || ''}</td>
-          <td style="border: 1px solid #000; padding: 2px; font-size: 14px; text-align: center; width: 40px; font-weight: bold;">${s?.gram || ''}</td>
-        </tr>
-      `;
-    }
+    const renderBodyRows = () =>
+      Array.from({length: totalDataRows}, (_, rowIndex) => {
+        const col1Index = rowIndex * 3;
+        const col2Index = col1Index + 1;
+        const col3Index = col1Index + 2;
+
+        const cell = (item: (typeof allItems)[number] | undefined, groupIndex: 0 | 1 | 2) => {
+          const gramClass = groupIndex < 2 ? 'c-gr sep-right' : 'c-gr';
+
+          if (!item) {
+            return `<td class="c-nm"></td><td class="c-ki"></td><td class="${gramClass}"></td>`;
+          }
+
+          const kg = item.kg > 0 ? item.kg : '';
+          const gram = item.gram > 0 ? item.gram : '';
+          return `
+            <td class="c-nm">${escapeHTML(item.itemNameGu)}</td>
+            <td class="c-ki">${kg}</td>
+            <td class="${gramClass}">${gram}</td>
+          `;
+        };
+
+        const rowClass = rowIndex % 2 === 0 ? '' : ' alt';
+        return `<tr class="${rowClass}">${cell(allItems[col1Index], 0)}${cell(allItems[col2Index], 1)}${cell(allItems[col3Index], 2)}</tr>`;
+      }).join('');
 
     return `
-      <div style="font-family: 'Noto Sans Gujarati', sans-serif; padding: 20px; color: #000; background: #fff; width: 950px; margin: auto; border: 1px solid #eee;">
-        
-        <!-- Header Section -->
-        <div style="text-align: center; margin-bottom: 10px; position: relative; border-bottom: 2px solid #C0392B; padding-bottom: 10px;">
-          <div style="position: absolute; left: 0; top: 0; font-size: 10px; text-align: left;">
-             ।। શ્રી ગણેશાય નમઃ ।।
-          </div>
-          <div style="position: absolute; right: 0; top: 0; font-size: 12px; text-align: right; line-height: 1.4;">
-             <strong>${profile.ownerName}</strong> - મો. ${profile.phone1}<br/>
-             ${profile.phone2 ? '<strong>બીજો નંબર</strong> - મો. ' + profile.phone2 : ''}
-          </div>
-          
-          <h1 style="font-size: 48px; color: #C0392B; margin: 5px 0 0 0; font-weight: 900; letter-spacing: 2px;">${profile.name}</h1>
-          <p style="margin: 2px 0; font-size: 16px; font-weight: bold;">${profile.tagline}</p>
-          <p style="margin: 0; font-size: 18px; color: #C0392B; font-weight: bold;">(${profile.address || 'મેસવાણવાળા'})</p>
-        </div>
+      <div class="pw">
+        <style>
+          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+          .pw {
+            font-family: Arial, 'Noto Sans Gujarati', sans-serif;
+            color: #111;
+            background: #fff;
+            font-size: 9.6px;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            line-height: 1.35;
+          }
+          .pg {
+            width: 190mm;
+            margin: 0 auto;
+            padding: 4.2mm 4.8mm;
+          }
 
-        <!-- Order Info Section -->
-        <div style="margin-bottom: 15px; font-size: 16px; line-height: 2;">
-          <div style="display: flex; justify-content: space-between;">
-            <div style="flex: 2;">ગ્રાહકનું નામ : <span style="border-bottom: 1px dotted #000; flex: 1; display: inline-block; min-width: 400px; font-weight: bold; padding-left: 10px;">${order.customerName}</span></div>
-            <div style="flex: 1; text-align: right;">તારીખ : <span style="border-bottom: 1px dotted #000; display: inline-block; min-width: 150px; font-weight: bold; text-align: left; padding-left: 10px;">${dayjs(order.eventDate).format('DD/MM/YYYY')}</span></div>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <div style="flex: 1;">સરનામું : <span style="border-bottom: 1px dotted #000; display: inline-block; min-width: 400px; font-weight: bold; padding-left: 10px;">${order.customerAddress || '-'}</span></div>
-            <div style="flex: 1; text-align: right;">પ્રસંગનું સ્થળ : <span style="border-bottom: 1px dotted #000; display: inline-block; min-width: 250px; font-weight: bold; text-align: left; padding-left: 10px;">${order.eventType || '-'}</span></div>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <div style="flex: 1;">ફોન નંબર : <span style="border-bottom: 1px dotted #000; display: inline-block; min-width: 300px; font-weight: bold; padding-left: 10px;">${order.customerPhone || '-'}</span></div>
-            <div style="flex: 1; text-align: right;">મોબાઇલ નંબર : <span style="border-bottom: 1px dotted #000; display: inline-block; min-width: 250px; font-weight: bold; text-align: left; padding-left: 10px;"></span></div>
-          </div>
-        </div>
+          .hd {
+            border: 2px solid #8B0000;
+            border-radius: 5px;
+            padding: 5px 8px 6px;
+            margin-bottom: 4px;
+            position: relative;
+          }
+          .hd-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 5px;
+          }
+          .hd-ganesh {
+            font-size: 8px;
+            color: #8B0000;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+          }
+          .hd-contact {
+            font-size: 8.2px;
+            text-align: right;
+            color: #222;
+            line-height: 1.45;
+          }
+          .hd-contact strong { color: #8B0000; }
+          .hd-brand { text-align: center; }
+          .hd-name {
+            font-size: 21px;
+            font-weight: 900;
+            color: #8B0000;
+            line-height: 1.15;
+            letter-spacing: -0.2px;
+          }
+          .hd-tag {
+            font-size: 8.2px;
+            color: #555;
+            margin-top: 2px;
+            line-height: 1.3;
+          }
 
-        <!-- Main Table Section -->
-        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000;">
-          <thead>
-            <!-- Top Header (Savar, Bapor, Sanj) -->
-            <tr style="background: #f0f0f0;">
-              <th colspan="3" style="border: 1.5px solid #000; padding: 8px; font-size: 18px; text-align: center; width: 33.33%;">સવારે</th>
-              <th colspan="3" style="border: 1.5px solid #000; padding: 8px; font-size: 18px; text-align: center; width: 33.33%;">બપોરે</th>
-              <th colspan="3" style="border: 1.5px solid #000; padding: 8px; font-size: 18px; text-align: center; width: 33.33%;">સાંજે</th>
+          .ci {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.5px solid #8B0000;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            overflow: hidden;
+          }
+          .ci td {
+            padding: 4px 7px;
+            border: 0.8px solid #d4a0a0;
+            vertical-align: top;
+          }
+          .ci-lbl {
+            display: block;
+            font-size: 7px;
+            color: #8B0000;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 2px;
+            line-height: 1;
+          }
+          .ci-val {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            color: #111;
+            line-height: 1.25;
+          }
+
+          .mt {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            border: 2px solid #8B0000;
+            border-radius: 3px;
+            overflow: hidden;
+          }
+
+          .mt .top-space th {
+            height: ${TOP_NOTE_SPACE_HEIGHT}px;
+            background: #fff;
+            padding: 0;
+            border-bottom: none;
+          }
+          .mt .top-space th:not(:last-child) {
+            border-right: 1.5px solid #8B0000;
+          }
+
+          .mt .sh th {
+            background: #8B0000;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+            padding: 4.5px 3px;
+            letter-spacing: 0.5px;
+            line-height: 1.15;
+          }
+          .mt .sh th:nth-child(1),
+          .mt .sh th:nth-child(2) {
+            border-right: 1.5px solid #5a0000;
+          }
+
+          .mt .sbh th {
+            background: #fdf0f0;
+            color: #8B0000;
+            font-size: 8px;
+            font-weight: 700;
+            text-align: center;
+            padding: 3px 2px;
+            border-bottom: 1.5px solid #8B0000;
+            line-height: 1.2;
+            letter-spacing: 0.15px;
+          }
+          .mt .sbh th:nth-child(3),
+          .mt .sbh th:nth-child(6) {
+            border-right: 1.5px solid #8B0000;
+          }
+          .mt tbody tr td {
+            padding: 3.5px 4px;
+            font-size: 9px;
+            border-bottom: 0.5px solid #f1dede;
+            vertical-align: middle;
+            line-height: 1.35;
+          }
+          .mt tbody tr.alt td { background: #fffafa; }
+          .mt tbody tr:last-child td { border-bottom: none; }
+
+          .c-nm {
+            min-width: 40px;
+            font-weight: 600;
+            color: #111;
+            border-right: 0.5px solid #e5b5b5 !important;
+            line-height: 1.35;
+            word-break: break-word;
+          }
+          .c-ki {
+            width: 22px;
+            text-align: center;
+            font-size: 8.2px;
+            font-weight: 700;
+            color: #8B0000;
+            border-right: 0.5px solid #e5b5b5 !important;
+            line-height: 1.2;
+            white-space: nowrap;
+          }
+          .c-gr {
+            width: 26px;
+            text-align: center;
+            font-size: 8.2px;
+            font-weight: 700;
+            color: #555;
+            border-right: none !important;
+            line-height: 1.2;
+            white-space: nowrap;
+          }
+          .c-gr.sep-right {
+            border-right: 1.5px solid #8B0000 !important;
+          }
+
+          .nb {
+            margin-top: 4px;
+            border: 1.5px solid #8B0000;
+            border-radius: 3px;
+            padding: 4px 6px;
+            font-size: 9px;
+            background: #fffafa;
+            line-height: 1.4;
+          }
+          .nb strong { color: #8B0000; font-size: 8px; text-transform: uppercase; }
+
+          .ft {
+            margin-top: 6px;
+            text-align: center;
+            font-size: 7px;
+            color: #aaa;
+            line-height: 1.4;
+          }
+        </style>
+
+        <div class="pg">
+          <div class="hd">
+            <div class="hd-top">
+              <div class="hd-ganesh">${labels.shreeGanesh}</div>
+              <div class="hd-contact">
+                <strong>${escapeHTML(profile.ownerName)}</strong> - ${labels.mo} ${escapeHTML(profile.phone1)}
+                ${profile.phone2 ? `<br>${labels.secondNumber}: ${labels.mo} ${escapeHTML(profile.phone2)}` : ''}
+                <br>(${escapeHTML(profile.address || labels.defaultAddress)})
+              </div>
+            </div>
+            <div class="hd-brand">
+              <div class="hd-name">${escapeHTML(profile.name)}</div>
+              ${profile.tagline ? `<div class="hd-tag">${escapeHTML(profile.tagline)}</div>` : ''}
+            </div>
+          </div>
+
+          <table class="ci">
+            <tr>
+              <td style="width:36%">
+                <span class="ci-lbl">${labels.customerName}</span>
+                <span class="ci-val">${escapeHTML(order.customerName)}</span>
+              </td>
+              <td style="width:18%">
+                <span class="ci-lbl">${labels.date}</span>
+                <span class="ci-val">${dayjs(order.eventDate).format('DD/MM/YYYY')}</span>
+              </td>
+              <td style="width:28%">
+                <span class="ci-lbl">${labels.eventType}</span>
+                <span class="ci-val">${escapeHTML(order.eventType)}</span>
+              </td>
+              <td style="width:18%">
+                <span class="ci-lbl">${labels.orderNumber}</span>
+                <span class="ci-val">${escapeHTML(order.orderNumber)}</span>
+              </td>
             </tr>
-            <!-- Sub Header (Vigat, KG, Gram) -->
-            <tr style="background: #fafafa;">
-              <!-- Morning -->
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center;">વિગત</th>
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center; width: 40px;">કિલો</th>
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center; width: 40px;">ગ્રામ</th>
-              <!-- Afternoon -->
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center;">વિગત</th>
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center; width: 40px;">કિલો</th>
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center; width: 40px;">ગ્રામ</th>
-              <!-- Evening -->
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center;">વિગત</th>
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center; width: 40px;">કિલો</th>
-              <th style="border: 1px solid #000; padding: 5px; font-size: 14px; text-align: center; width: 40px;">ગ્રામ</th>
+            <tr>
+              <td colspan="2">
+                <span class="ci-lbl">${labels.address}</span>
+                <span class="ci-val">${escapeHTML(order.customerAddress)}</span>
+              </td>
+              <td colspan="2">
+                <span class="ci-lbl">${labels.phone}</span>
+                <span class="ci-val">${escapeHTML(order.customerPhone)}</span>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            ${tableRows}
-          </tbody>
-        </table>
+          </table>
 
-        <!-- Footer / Notes -->
-        ${order.notes ? `
-          <div style="margin-top: 15px; border: 1px solid #000; padding: 10px;">
-            <strong>નોંધ :</strong> ${order.notes}
+          <table class="mt">
+            <thead>
+              <tr class="top-space">
+                <th colspan="3"></th>
+                <th colspan="3"></th>
+                <th colspan="3"></th>
+              </tr>
+              <tr class="sh">
+                <th colspan="3">&nbsp;</th>
+                <th colspan="3">&nbsp;</th>
+                <th colspan="3">&nbsp;</th>
+              </tr>
+              <tr class="sbh">
+                <th>${labels.details}</th>
+                <th style="width:22px">${labels.kiloShort}</th>
+                <th style="width:26px">${labels.gramShort}</th>
+                <th>${labels.details}</th>
+                <th style="width:22px">${labels.kiloShort}</th>
+                <th style="width:26px">${labels.gramShort}</th>
+                <th>${labels.details}</th>
+                <th style="width:22px">${labels.kiloShort}</th>
+                <th style="width:26px">${labels.gramShort}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderBodyRows()}
+            </tbody>
+          </table>
+
+          ${order.notes ? `
+            <div class="nb">
+              <strong>${labels.notes} :</strong> ${escapeHTML(order.notes)}
+            </div>
+          ` : ''}
+
+          <div class="ft">
+            Generated via CaterBill &nbsp;&middot;&nbsp; Made with &#10084; by Prince Chaniyara
           </div>
-        ` : ''}
-        
-        <div style="margin-top: 20px; text-align: center; font-size: 12px; color: #666; font-style: italic;">
-          Generated via CaterBill Application
         </div>
       </div>
     `;
   };
-
   const exportPDF = async () => {
     setIsExporting(true);
+    const element = document.createElement('div');
     try {
       const html = generateHTML();
-      const element = document.createElement('div');
       element.innerHTML = html;
       document.body.appendChild(element);
 
       const opt = {
-        margin:       [5, 5, 5, 5],
+        margin:       [4, 4, 4, 4] as [number, number, number, number],
         filename:     `${order?.customerName}_Bill.pdf`,
-        image:        { type: 'jpeg', quality: 1 },
-        html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        image:        { type: 'jpeg' as const, quality: 1 },
+        html2canvas:  { scale: 2.2, useCORS: true, letterRendering: true },
+        jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+        pagebreak:    { mode: ['css', 'legacy'] as ['css', 'legacy'] }
       };
 
       await html2pdf().set(opt).from(element).save();
-      document.body.removeChild(element);
     } catch (error) {
       console.error('PDF Error:', error);
       alert('PDF Error');
     } finally {
+      if (document.body.contains(element)) {
+        document.body.removeChild(element);
+      }
       setIsExporting(false);
     }
   };
@@ -191,18 +468,25 @@ export default function OrderReview() {
     if (!order || !items) return;
 
     const formatItems = (slotItems: typeof items) => 
-      slotItems.map(i => `✅ *${i.itemNameGu}*: ${i.kg ? i.kg + ' કિલો' : ''} ${i.gram ? i.gram + ' ગ્રામ' : ''}`).join('\n');
+      slotItems
+        .map(
+          (i) =>
+            `${uiIcons.check} *${i.itemNameGu}*: ${
+              i.kg ? `${i.kg} ${uiText.kilo}` : ''
+            } ${i.gram ? `${i.gram} ${uiText.gram}` : ''}`.trim(),
+        )
+        .join('\n');
 
-    const text = `*📦 ઓર્ડર વિગત - ${profile?.name}*\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *ગ્રાહક:* ${order.customerName}\n` +
-      `📅 *તારીખ:* ${dayjs(order.eventDate).format('DD/MM/YYYY')}\n` +
-      `🎉 *પ્રસંગ:* ${order.eventType}\n` +
-      `━━━━━━━━━━━━━━━━━━\n\n` +
-      (morning.length ? `*🌅 સવારે*\n${formatItems(morning)}\n\n` : '') +
-      (afternoon.length ? `*☀️ બપોરે*\n${formatItems(afternoon)}\n\n` : '') +
-      (evening.length ? `*🌙 સાંજે*\n${formatItems(evening)}\n\n` : '') +
-      (order.notes ? `*📝 નોંધ:*\n${order.notes}\n\n` : '') +
+    const text = `*${uiIcons.package} ${uiText.waOrderDetails} - ${profile?.name}*\n` +
+      `${waDivider}\n` +
+      `${uiIcons.customer} *${uiText.waCustomer}:* ${order.customerName}\n` +
+      `${uiIcons.date} *${uiText.date}:* ${dayjs(order.eventDate).format('DD/MM/YYYY')}\n` +
+      `${uiIcons.event} *${uiText.eventType}:* ${order.eventType}\n` +
+      `${waDivider}\n\n` +
+      (morning.length ? `*${uiIcons.morning} ${uiText.morning}*\n${formatItems(morning)}\n\n` : '') +
+      (afternoon.length ? `*${uiIcons.afternoon} ${uiText.afternoon}*\n${formatItems(afternoon)}\n\n` : '') +
+      (evening.length ? `*${uiIcons.evening} ${uiText.evening}*\n${formatItems(evening)}\n\n` : '') +
+      (order.notes ? `*${uiIcons.notes} ${uiText.notes}:*\n${order.notes}\n\n` : '') +
       `_Generated via CaterBill_`;
 
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -247,13 +531,13 @@ export default function OrderReview() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <Calendar size={10} /> તારીખ
+                <Calendar size={10} /> {uiText.date}
               </span>
               <p className="font-bold text-gray-800">{dayjs(order.eventDate).format('DD MMM, YYYY')}</p>
             </div>
             <div className="space-y-1">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <CheckCircle size={10} /> પ્રસંગ
+                <CheckCircle size={10} /> {uiText.eventType}
               </span>
               <p className="font-bold text-gray-800">{order.eventType}</p>
             </div>
@@ -274,9 +558,9 @@ export default function OrderReview() {
 
         {/* Time Slots */}
         {[
-          { title: 'સવારે', items: morning, icon: '🌅', color: 'text-orange-500', bg: 'bg-orange-50', id: 'morning' },
-          { title: 'બપોરે', items: afternoon, icon: '☀️', color: 'text-blue-500', bg: 'bg-blue-50', id: 'afternoon' },
-          { title: 'સાંજે', items: evening, icon: '🌙', color: 'text-purple-500', bg: 'bg-purple-50', id: 'evening' }
+          { title: uiText.morning, items: morning, icon: uiIcons.morning, color: 'text-orange-500', bg: 'bg-orange-50', id: 'morning' },
+          { title: uiText.afternoon, items: afternoon, icon: uiIcons.afternoon, color: 'text-blue-500', bg: 'bg-blue-50', id: 'afternoon' },
+          { title: uiText.evening, items: evening, icon: uiIcons.evening, color: 'text-purple-500', bg: 'bg-purple-50', id: 'evening' }
         ].map((slot, sIdx) => (
           <motion.div 
             key={slot.title}
@@ -293,7 +577,7 @@ export default function OrderReview() {
                 <span className="text-xl">{slot.icon}</span>
                 <span className={cn("font-black uppercase tracking-widest text-sm", slot.color)}>{slot.title}</span>
                 <span className="text-[10px] font-black bg-white px-2 py-1 rounded-full shadow-sm text-gray-400">
-                  {slot.items.length} વસ્તુઓ
+                  {slot.items.length} {uiText.items}
                 </span>
               </div>
               {collapsedSlots.has(slot.id) ? <ChevronDown size={20} className="text-gray-400" /> : <ChevronUp size={20} className="text-gray-400" />}
@@ -310,7 +594,7 @@ export default function OrderReview() {
                   <div className="divide-y divide-gray-50">
                     {slot.items.length === 0 ? (
                       <div className="p-8 text-center">
-                        <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">કોઈ વસ્તુ નથી</p>
+                        <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{uiText.noItems}</p>
                       </div>
                     ) : (
                       slot.items.map(item => (
@@ -319,8 +603,8 @@ export default function OrderReview() {
                             <p className="font-bold text-gray-800 text-lg leading-tight">{item.itemNameGu}</p>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-xs font-black text-[#C0392B] bg-red-50 px-2 py-0.5 rounded-lg">
-                                {item.kg > 0 && `${item.kg} કિલો `}
-                                {item.gram > 0 && `${item.gram} ગ્રામ`}
+                                {item.kg > 0 && `${item.kg} ${uiText.kilo} `}
+                                {item.gram > 0 && `${item.gram} ${uiText.gram}`}
                               </span>
                             </div>
                           </div>
@@ -355,7 +639,7 @@ export default function OrderReview() {
             animate={{ opacity: 1 }}
             className="bg-red-50/30 p-6 rounded-[28px] border border-dashed border-red-100"
           >
-            <h3 className="text-xs font-black text-[#C0392B] uppercase tracking-widest mb-2">📝 નોંધ</h3>
+            <h3 className="text-xs font-black text-[#C0392B] uppercase tracking-widest mb-2">{uiIcons.notes} {uiText.notes}</h3>
             <p className="text-gray-700 font-medium leading-relaxed">{order.notes}</p>
           </motion.div>
         )}
@@ -391,7 +675,7 @@ export default function OrderReview() {
           className="w-full flex items-center justify-center gap-3 bg-[#C0392B] text-white py-5 rounded-[24px] font-black text-lg shadow-xl shadow-red-900/20 active:scale-[0.98] transition-all"
         >
           <CheckCircle size={24} /> 
-          {order.status === 'completed' ? 'હોમ પર પાછા ફરો' : 'ઓર્ડર પૂર્ણ કરો'}
+          {order.status === 'completed' ? uiText.backHome : uiText.completeOrder}
         </button>
       </div>
     </div>

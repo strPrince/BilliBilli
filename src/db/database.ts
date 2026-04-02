@@ -72,6 +72,15 @@ export class CaterBillDB extends Dexie {
       orderItems: '++id, orderId, itemKey, category, timeSlot',
       customItems: '++id, itemKey, category',
     });
+
+    // v3 adds optimized compound index for OrderQuantities queries
+    this.version(3).stores({
+      businessProfile: '++id',
+      orders:
+        '++id, orderNumber, customerName, eventDate, status, createdAt, updatedAt',
+      orderItems: '++id, [orderId+timeSlot], orderId, itemKey, category, timeSlot',
+      customItems: '++id, itemKey, category',
+    });
   }
 }
 

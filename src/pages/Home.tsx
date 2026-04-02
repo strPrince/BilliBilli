@@ -20,8 +20,11 @@ export default function Home() {
 
   const handleDelete = async (id: number) => {
     if (window.confirm('શું તમે ખરેખર આ ઓર્ડર કાઢી નાખવા માંગો છો?')) {
-      await db.orders.delete(id);
-      await db.orderItems.where('orderId').equals(id).delete();
+      // Batch operations in a transaction for better performance
+      await db.transaction('rw', db.orders, db.orderItems, async () => {
+        await db.orders.delete(id);
+        await db.orderItems.where('orderId').equals(id).delete();
+      });
     }
   };
 

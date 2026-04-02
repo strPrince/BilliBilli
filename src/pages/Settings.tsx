@@ -320,8 +320,8 @@ export default function SettingsPage() {
       <div className="flex flex-col items-center gap-2 pt-4 opacity-30">
         <ShieldCheck size={24} className="text-gray-400" />
         <p className="text-[10px] font-black text-gray-500 uppercase tracking-[4px]">Secure Database</p>
+        <p className="text-[10px] font-semibold text-gray-500">Made with {'\u2764'} by Prince Chaniyara</p>
       </div>
     </div>
   );
 }
-

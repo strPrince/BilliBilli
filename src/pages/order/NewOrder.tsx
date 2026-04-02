@@ -129,7 +129,7 @@ export default function NewOrder() {
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-bold text-gray-600 ml-1">
                   <BookOpen size={16} className="text-[#C0392B]" />
-                  પ્રસંગ
+                  પ્રસંગ પ્રકાર
                 </label>
                 <select 
                   className="w-full p-4 bg-white border border-gray-100 rounded-2xl shadow-sm focus:ring-2 focus:ring-[#C0392B]/20 focus:border-[#C0392B] outline-none transition-all font-bold text-gray-900 appearance-none"

@@ -3,6 +3,7 @@ import { db } from '../db/database';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Edit2, Trash2, X, Search, Package, CheckCircle2 } from 'lucide-react';
 import { MASTER_ITEMS, ItemCategory } from '../data/masterItems';
+import { useCustomItems } from '../hooks/useCustomItems';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -51,7 +52,7 @@ const CATEGORY_LABELS: Record<ItemCategory, string> = {
 };
 
 export default function ItemsManager() {
-  const customItems = useLiveQuery(() => db.customItems.toArray());
+  const customItems = useCustomItems();
   
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory>('લોટ_અને_બેસન');
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +66,10 @@ export default function ItemsManager() {
 
   // Combine master items and custom items
   const allItems = useMemo(() => {
-    const masterList = MASTER_ITEMS.map(item => ({ ...item, isCustom: false }));
+    const customKeys = new Set((customItems || []).map(c => c.itemKey));
+    const masterList = MASTER_ITEMS
+      .filter(item => !customKeys.has(item.key)) // Filter out master items that have custom overrides
+      .map(item => ({ ...item, isCustom: false }));
     const customList = (customItems || []).map(item => ({
       id: item.id,
       key: item.itemKey,
@@ -80,6 +84,7 @@ export default function ItemsManager() {
   // Filter items by category and search
   const filteredItems = useMemo(() => {
     return allItems
+      .filter(item => item.nameGu && item.nameEn) // Filter out deleted items (empty names)
       .filter(item => item.category === selectedCategory)
       .filter(item =>
         item.nameGu.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -103,25 +108,17 @@ export default function ItemsManager() {
   };
 
   const openEditModal = (item: Item) => {
-    if (item.isCustom) {
-      setEditingItem(item);
-      setFormData({
-        nameGu: item.nameGu,
-        nameEn: item.nameEn,
-        category: item.category,
-      });
-      setShowModal(true);
-    } else {
-      if (window.confirm(`શું તમે આ માસ્ટર આઇટમનું આપનું વર્ઝન બનાવવા માંગો છો?\n\n'${item.nameGu}'`)) {
-        setEditingItem(null);
-        setFormData({
-          nameGu: item.nameGu,
-          nameEn: item.nameEn,
-          category: item.category,
-        });
-        setShowModal(true);
-      }
-    }
+    // Allow editing both custom and master items
+    setEditingItem({
+      ...item,
+      id: item.id || undefined, // Include id if it exists
+    });
+    setFormData({
+      nameGu: item.nameGu,
+      nameEn: item.nameEn,
+      category: item.category,
+    });
+    setShowModal(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -130,12 +127,34 @@ export default function ItemsManager() {
 
     try {
       if (editingItem && editingItem.id) {
+        // Update existing custom item
         await db.customItems.update(editingItem.id, {
           itemNameGu: formData.nameGu,
           itemNameEn: formData.nameEn,
           category: formData.category,
         });
+      } else if (editingItem && !editingItem.id) {
+        // Editing a master item - create/update a custom override with the same key
+        const existingCustom = (customItems || []).find(c => c.itemKey === editingItem.key);
+        if (existingCustom) {
+          // Update existing override
+          await db.customItems.update(existingCustom.id, {
+            itemNameGu: formData.nameGu,
+            itemNameEn: formData.nameEn,
+            category: formData.category,
+          });
+        } else {
+          // Create new override with the same key as the master item
+          await db.customItems.add({
+            itemKey: editingItem.key,
+            itemNameGu: formData.nameGu,
+            itemNameEn: formData.nameEn,
+            category: formData.category,
+            createdAt: new Date().toISOString(),
+          });
+        }
       } else {
+        // Adding a new item
         const newKey = `custom_${Date.now()}`;
         await db.customItems.add({
           itemKey: newKey,
@@ -153,10 +172,28 @@ export default function ItemsManager() {
   };
 
   const handleDelete = async (item: Item) => {
-    if (!item.isCustom) return;
     if (window.confirm(`શું તમે '${item.nameGu}' કાઢી દેવા છો?`)) {
       try {
-        if (item.id) await db.customItems.delete(item.id);
+        if (item.isCustom && item.id) {
+          // Delete custom item
+          await db.customItems.delete(item.id);
+        } else if (!item.isCustom) {
+          // For master items, create a custom delete marker (empty names)
+          const existingCustom = (customItems || []).find(c => c.itemKey === item.key);
+          if (existingCustom) {
+            // Delete the override if it exists
+            await db.customItems.delete(existingCustom.id);
+          } else {
+            // Create a delete marker (empty custom item)
+            await db.customItems.add({
+              itemKey: item.key,
+              itemNameGu: '',
+              itemNameEn: '',
+              category: item.category,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
       } catch (error) {
         console.error('Error deleting item:', error);
       }
@@ -250,27 +287,15 @@ export default function ItemsManager() {
                 <div className="flex gap-1 ml-3">
                   <button
                     onClick={() => openEditModal(item)}
-                    disabled={!item.isCustom}
-                    title={item.isCustom ? "આઇટમ સંપાદિત કરો" : "માસ્ટર આઇટમ્સ સંભાલી શકાતા નથી"}
-                    className={cn(
-                      "p-2.5 rounded-xl transition-all active:scale-90",
-                      item.isCustom 
-                        ? "text-blue-600 bg-white hover:bg-blue-50 cursor-pointer" 
-                        : "text-gray-300 bg-gray-50 cursor-not-allowed opacity-50"
-                    )}
+                    title="આઇટમ સંપાદિત કરો"
+                    className="p-2.5 text-blue-600 bg-white rounded-xl active:scale-90 hover:bg-blue-50 transition-all"
                   >
                     <Edit2 size={18} />
                   </button>
                   <button
                     onClick={() => handleDelete(item)}
-                    disabled={!item.isCustom}
-                    title={item.isCustom ? "આઇટમ કાઢી દો" : "માસ્ટર આઇટમ્સ કાઢી શકાતા નથી"}
-                    className={cn(
-                      "p-2.5 rounded-xl transition-all active:scale-90",
-                      item.isCustom
-                        ? "text-red-400 bg-white hover:bg-red-50 cursor-pointer"
-                        : "text-gray-300 bg-gray-50 cursor-not-allowed opacity-50"
-                    )}
+                    title="આઇટમ કાઢી દો"
+                    className="p-2.5 text-red-400 bg-white rounded-xl active:scale-90 hover:bg-red-50 transition-all"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -359,7 +384,7 @@ export default function ItemsManager() {
                 </div>
 
                 <div className="flex gap-4 pt-2">
-                  {editingItem && editingItem.id && (
+                  {editingItem && (
                     <button
                       type="button"
                       onClick={() => {

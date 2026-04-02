@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../../db/database';
 import { MASTER_ITEMS, ItemCategory } from '../../data/masterItems';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useCustomItems } from '../../hooks/useCustomItems';
 import { Search, CheckCircle2, Circle, Plus, X, Package, ChevronRight, CheckSquare, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -42,7 +43,7 @@ export default function OrderItems() {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customItem, setCustomItem] = useState({ nameGu: '', nameEn: '', category: 'અન્ય' as ItemCategory });
 
-  const customItems = useLiveQuery(() => db.customItems.toArray()) || [];
+  const customItems = useCustomItems();
   const existingOrderItems = useLiveQuery(() => db.orderItems.where('orderId').equals(orderId).toArray());
 
   useEffect(() => {
