@@ -20,20 +20,6 @@ const SLOT_CONFIG = [
   { id: 'evening', label: 'સાંજે', icon: '🌙' }
 ];
 
-const CATEGORY_LABELS: Record<string, string> = {
-  'લોટ_અને_બેસન': 'લોટ અને બેસન',
-  'મસાલા': 'મસાલા',
-  'કઠોળ_અને_દાળ': 'કઠોળ અને દાળ',
-  'શાકભાજી': 'શાકભાજી',
-  'ડ્રાયફ્રૂટ': 'ડ્રાયફ્રૂટ',
-  'ઘી_અને_તેલ': 'ઘી અને તેલ',
-  'ડેરી': 'ડેરી',
-  'મીઠાઈ_સામગ્રી': 'મીઠાઈ સામગ્રી',
-  'વાસણો': 'વાસણો',
-  'ડીસ્પોઝેબલ': 'ડીસ્પોઝેબલ',
-  'અન્ય': 'અન્ય',
-};
-
 export default function OrderQuantities() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -48,6 +34,18 @@ export default function OrderQuantities() {
     () => db.orderItems.where({ orderId, timeSlot: activeTab }).toArray(),
     [orderId, activeTab]
   );
+
+  const customCategories = useLiveQuery(() => db.customCategories.toArray());
+  
+  const categoryLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    if (customCategories) {
+      customCategories.forEach(cat => {
+        labels[cat.categoryKeyGu] = cat.categoryLabelGu;
+      });
+    }
+    return labels;
+  }, [customCategories]);
 
   const stats = useMemo(() => {
     if (!allItems) return { total: 0, completed: 0, percent: 0 };
@@ -173,7 +171,7 @@ export default function OrderQuantities() {
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#C0392B]" />
                 <span className="text-xs font-black text-gray-900 uppercase tracking-widest">
-                  {CATEGORY_LABELS[category] || category} ({catItems.length})
+                  {categoryLabels[category] || category} ({catItems.length})
                 </span>
               </div>
               {collapsedCategories.has(category) ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronUp size={16} className="text-gray-400" />}

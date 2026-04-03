@@ -13,30 +13,11 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const CATEGORIES: ItemCategory[] = [
-  'લોટ_અને_બેસન', 'મસાલા', 'કઠોળ_અને_દાળ', 'શાકભાજી', 'ફળ', 'ડ્રાયફ્રૂટ', 'ઘી_અને_તેલ', 'ડેરી', 'મીઠાઈ_સામગ્રી', 'વાસણો', 'ડીસ્પોઝેબલ', 'અન્ય'
-];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  'લોટ_અને_બેસન': 'લોટ અને બેસન',
-  'મસાલા': 'મસાલા',
-  'કઠોળ_અને_દાળ': 'કઠોળ અને દાળ',
-  'શાકભાજી': 'શાકભાજી',
-  'ફળ': 'ફળ',
-  'ડ્રાયફ્રૂટ': 'ડ્રાયફ્રૂટ',
-  'ઘી_અને_તેલ': 'ઘી અને તેલ',
-  'ડેરી': 'ડેરી',
-  'મીઠાઈ_સામગ્રી': 'મીઠાઈ સામગ્રી',
-  'વાસણો': 'વાસણો',
-  'ડીસ્પોઝેબલ': 'ડીસ્પોઝેબલ',
-  'અન્ય': 'અન્ય',
-};
-
 interface SelectedItemData {
   key: string;
   nameGu: string;
   nameEn: string;
-  category: ItemCategory;
+  category: string;
   isCustom: number;
   kg: number;
   gram: number;
@@ -48,14 +29,41 @@ export default function OrderItems() {
   const orderId = Number(id);
 
   const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<ItemCategory>('લોટ_અને_બેસન');
+  const [activeCategory, setActiveCategory] = useState<string>('લોટ_અને_બેસન');
   const [selectedItemsData, setSelectedItemsData] = useState<Map<string, SelectedItemData>>(new Map());
   const [showCustomModal, setShowCustomModal] = useState(false);
-  const [customItem, setCustomItem] = useState({ nameGu: '', nameEn: '', category: 'અન્ય' as ItemCategory });
+  const [customItem, setCustomItem] = useState({ nameGu: '', nameEn: '', category: 'અન્ય' });
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const customItems = useCustomItems();
+  const customCategories = useLiveQuery(() => db.customCategories.toArray());
   const existingOrderItems = useLiveQuery(() => db.orderItems.where('orderId').equals(orderId).toArray());
+
+  // Deduplicate categories - remove duplicates while maintaining order
+  const uniqueCategories = useMemo(() => {
+    if (!customCategories) return [];
+    const seen = new Set<string>();
+    const unique = [];
+    
+    for (const cat of customCategories) {
+      if (!seen.has(cat.categoryKeyGu)) {
+        seen.add(cat.categoryKeyGu);
+        unique.push(cat);
+      }
+    }
+    
+    return unique;
+  }, [customCategories]);
+
+  // Set initial selected category when customCategories loads
+  useEffect(() => {
+    if (uniqueCategories && uniqueCategories.length > 0 && activeCategory === 'લોટ_અને_બેસન') {
+      const hasDefault = uniqueCategories.some(c => c.categoryKeyGu === 'લોટ_અને_બેસન');
+      if (!hasDefault && uniqueCategories.length > 0) {
+        setActiveCategory(uniqueCategories[0].categoryKeyGu);
+      }
+    }
+  }, [uniqueCategories]);
 
   useEffect(() => {
     if (existingOrderItems && existingOrderItems.length > 0) {
@@ -108,20 +116,22 @@ export default function OrderItems() {
         isCustom: 0,
       }));
 
-    const customList = Array.from(customByKey.values()).map((item) => ({
-      key: item.itemKey,
-      nameGu: item.itemNameGu,
-      nameEn: item.itemNameEn,
-      category: item.category,
-      isCustom: 1,
-    }));
+    const customList = Array.from(customByKey.values())
+      .filter(item => item.itemNameGu.trim() !== '' && item.itemNameEn.trim() !== '') // Filter out deleted markers
+      .map((item) => ({
+        key: item.itemKey,
+        nameGu: item.itemNameGu,
+        nameEn: item.itemNameEn,
+        category: item.category,
+        isCustom: 1,
+      }));
 
     return [...masterList, ...customList];
   }, [customItems]);
 
   const filteredItems = useMemo(() => allItems.filter((item: any) => {
     const matchesSearch = item.nameGu.includes(search) || item.nameEn.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = search ? true : item.category === activeCategory;
+    const matchesCategory = search ? true : String(item.category) === String(activeCategory);
     return matchesSearch && matchesCategory;
   }), [allItems, search, activeCategory]);
 
@@ -252,22 +262,22 @@ export default function OrderItems() {
           {/* Categories */}
           {!search && (
             <div className="flex overflow-x-auto no-scrollbar -mx-4 px-4 gap-2">
-              {CATEGORIES.map(cat => (
+              {uniqueCategories.map(cat => (
                 <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
+                  key={cat.categoryKeyGu}
+                  onClick={() => setActiveCategory(cat.categoryKeyGu)}
                   className={cn(
                     "px-4 py-2 rounded-xl whitespace-nowrap text-sm font-bold transition-all relative",
-                    activeCategory === cat ? "text-white" : "text-gray-500 bg-gray-50 hover:bg-gray-100"
+                    activeCategory === cat.categoryKeyGu ? "text-white" : "text-gray-500 bg-gray-50 hover:bg-gray-100"
                   )}
                 >
-                  {activeCategory === cat && (
+                  {activeCategory === cat.categoryKeyGu && (
                     <motion.div 
                       layoutId="active-cat-order"
                       className="absolute inset-0 bg-[#C0392B] rounded-xl -z-10 shadow-lg shadow-red-900/10"
                     />
                   )}
-                  {CATEGORY_LABELS[cat] || cat}
+                  {cat.categoryLabelGu}
                 </button>
               ))}
             </div>
@@ -453,9 +463,9 @@ export default function OrderItems() {
                   <select 
                     className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#C0392B]/20 outline-none text-base appearance-none"
                     value={customItem.category}
-                    onChange={e => setCustomItem({...customItem, category: e.target.value as ItemCategory})}
+                    onChange={e => setCustomItem({...customItem, category: e.target.value})}
                   >
-                    {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c] || c}</option>)}
+                    {uniqueCategories.map(c => <option key={c.categoryKeyGu} value={c.categoryKeyGu}>{c.categoryLabelGu}</option>)}
                   </select>
                 </div>
 
