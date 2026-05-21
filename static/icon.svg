@@ -1,11 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="BilliBilli icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Umiya Caters Logo">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0b1d3a" />
-      <stop offset="100%" stop-color="#1d4d9b" />
+    <!-- Background brand gradient -->
+    <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E74C3C" />
+      <stop offset="100%" stop-color="#78281F" />
     </linearGradient>
+    <!-- Gold gradient for premium accents -->
+    <linearGradient id="gold-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F5B041" />
+      <stop offset="50%" stop-color="#F1C40F" />
+      <stop offset="100%" stop-color="#D4AC0D" />
+    </linearGradient>
+    <!-- Shadow filter for modern depth -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#1A0506" flood-opacity="0.4" />
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)" />
-  <circle cx="256" cy="256" r="148" fill="#ffffff" opacity="0.95" />
-  <path d="M196 188h112c45 0 78 28 78 68 0 37-27 62-67 68l66 66h-70l-57-61h-23v61h-59V188zm59 48v47h49c15 0 24-9 24-24 0-14-10-23-24-23h-49z" fill="#0b1d3a" />
+
+  <!-- App Rounded Background -->
+  <rect width="512" height="512" rx="112" fill="url(#brand-grad)" />
+
+  <!-- Inner glowing frame -->
+  <rect x="24" y="24" width="464" height="464" rx="88" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2" />
+  
+  <!-- Outer Glow Circle -->
+  <circle cx="256" cy="265" r="170" fill="none" stroke="url(#gold-grad)" stroke-width="1.5" opacity="0.15" />
+
+  <g filter="url(#shadow)">
+    <!-- Steam Curves (representing billing/fresh steam) -->
+    <path d="M226 150 c -8 -16, 8 -24, 0 -40" fill="none" stroke="url(#gold-grad)" stroke-width="5" stroke-linecap="round" opacity="0.8" />
+    <path d="M256 142 c 0 -20, 16 -20, 8 -44" fill="none" stroke="url(#gold-grad)" stroke-width="5" stroke-linecap="round" opacity="0.9" />
+    <path d="M286 150 c 8 -16, -8 -24, 0 -40" fill="none" stroke="url(#gold-grad)" stroke-width="5" stroke-linecap="round" opacity="0.8" />
+
+    <!-- Cloche Handle -->
+    <circle cx="256" cy="172" r="14" fill="url(#gold-grad)" />
+    <circle cx="256" cy="172" r="8" fill="#ffffff" opacity="0.2" />
+
+    <!-- Cloche Dome -->
+    <path d="M156 286 a 100 100 0 0 1 200 0 Z" fill="#ffffff" />
+    
+    <!-- Glassmorphic specular highlight -->
+    <path d="M176 286 a 80 80 0 0 1 100 -70" fill="none" stroke="#E74C3C" stroke-width="3" stroke-linecap="round" opacity="0.15" />
+
+    <!-- Stylized Billing Checkmark inside Dome (Crimson / Orange fill-themed check) -->
+    <path d="M210 246 l 30 30 l 66 -66" fill="none" stroke="url(#brand-grad)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Platter Base -->
+    <path d="M136 292 h 240 c 8 0, 14 6, 14 12 c 0 6, -6 12, -14 12 H 136 c -8 0, -14 -6, -14 -12 c 0 -6, 6 -12, 14 -12 Z" fill="url(#gold-grad)" />
+    
+    <!-- Elegant Platter Bottom Lip -->
+    <path d="M110 320 h 292 c 8 0, 14 5, 14 10 c 0 5, -6 10, -14 10 H 110 c -8 0, -14 -5, -14 -10 c 0 -5, 6 -10, 14 -10 Z" fill="#ffffff" opacity="0.95" />
+    
+    <!-- Small billing line decoration on platter base -->
+    <rect x="236" y="323" width="40" height="4" rx="2" fill="url(#brand-grad)" opacity="0.4" />
+  </g>
 </svg>

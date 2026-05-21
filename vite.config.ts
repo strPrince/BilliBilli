@@ -16,9 +16,9 @@ export default defineConfig(({mode}) => {
         injectRegister: 'auto',
         includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'],
         manifest: {
-          name: 'કેટર બિલ (CaterBill)',
-          short_name: 'CaterBill',
-          description: 'Catering order and item management app.',
+          name: 'ઉમિયા કેટર્સ (Umiya Caters)',
+          short_name: 'Umiya Caters',
+          description: 'Umiya Caters order and item management app.',
           theme_color: '#C0392B',
           background_color: '#F8F9FA',
           display: 'standalone',
